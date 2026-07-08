@@ -158,6 +158,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   bool _isRefreshing = false;
   bool _isStopping = false;
   int? _executingManualProgramId;
+  int? _executingScheduleId;
   int? _testingZoneId;
   Timer? _pollTimer;
 
@@ -229,8 +230,15 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                         onRetry: _loadSnapshot,
                         executingManualProgramId: _executingManualProgramId,
                         onExecuteManualProgram: _executeManualProgram,
+                        executingScheduleId: _executingScheduleId,
+                        onExecuteSchedule: _executeSchedule,
+                        onAddSchedule: _addSchedule,
+                        onEditSchedule: _editSchedule,
+                        onDeleteSchedule: _deleteSchedule,
+                        onEditManualProgram: _editManualProgram,
                         testingZoneId: _testingZoneId,
                         onTestZone: _testZone,
+                        onEditZone: _editZone,
                         isStopping: _isStopping,
                         onStop: _stopWatering,
                         apiSettings: _apiSettings,
@@ -323,6 +331,90 @@ class _IrrigationHomeState extends State<IrrigationHome> {
     }
   }
 
+  Future<void> _executeSchedule(ScheduleProgram schedule) async {
+    if (_executingScheduleId != null) return;
+
+    setState(() => _executingScheduleId = schedule.id);
+    try {
+      final command = await _client.executeSchedule(schedule.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Trimis: ${command.command}')));
+      await _loadSnapshot();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Executia a esuat: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _executingScheduleId = null);
+      }
+    }
+  }
+
+  Future<void> _addSchedule() async {
+    final snapshot = _snapshot ?? IrrigationSnapshot.empty();
+    final request = await showDialog<ScheduleWriteRequest>(
+      context: context,
+      builder: (context) => ScheduleDialog(zones: snapshot.zones),
+    );
+    if (request == null) return;
+    await _runWrite(
+      () => _client.createSchedule(request),
+      successMessage: 'Programarea a fost adaugata',
+      errorPrefix: 'Adaugarea programarii a esuat',
+    );
+  }
+
+  Future<void> _editSchedule(ScheduleProgram schedule) async {
+    final snapshot = _snapshot ?? IrrigationSnapshot.empty();
+    final request = await showDialog<ScheduleWriteRequest>(
+      context: context,
+      builder: (context) =>
+          ScheduleDialog(zones: snapshot.zones, schedule: schedule),
+    );
+    if (request == null) return;
+    await _runWrite(
+      () => _client.updateSchedule(schedule.id, request),
+      successMessage: 'Programarea a fost salvata',
+      errorPrefix: 'Salvarea programarii a esuat',
+    );
+  }
+
+  Future<void> _deleteSchedule(ScheduleProgram schedule) async {
+    final confirmed = await _confirmDelete(
+      title: 'Stergi programarea?',
+      message:
+          'Programarea #${schedule.id} pentru ${schedule.zone.name} va fi stearsa.',
+    );
+    if (!confirmed) return;
+    await _runWrite(
+      () => _client.deleteSchedule(schedule.id),
+      successMessage: 'Programarea a fost stearsa',
+      errorPrefix: 'Stergerea programarii a esuat',
+    );
+  }
+
+  Future<void> _editManualProgram(ManualProgram program) async {
+    final snapshot = _snapshot ?? IrrigationSnapshot.empty();
+    final request = await showDialog<ManualProgramWriteRequest>(
+      context: context,
+      builder: (context) =>
+          ManualProgramDialog(zones: snapshot.zones, program: program),
+    );
+    if (request == null) return;
+    await _runWrite(
+      () => _client.updateManualProgram(program.id, request),
+      successMessage: 'Programul manual a fost salvat',
+      errorPrefix: 'Salvarea programului manual a esuat',
+    );
+  }
+
   Future<void> _testZone(IrrigationZone zone) async {
     if (_testingZoneId != null) return;
 
@@ -347,6 +439,19 @@ class _IrrigationHomeState extends State<IrrigationHome> {
         setState(() => _testingZoneId = null);
       }
     }
+  }
+
+  Future<void> _editZone(IrrigationZone zone) async {
+    final request = await showDialog<ZoneWriteRequest>(
+      context: context,
+      builder: (context) => ZoneDialog(zone: zone),
+    );
+    if (request == null) return;
+    await _runWrite(
+      () => _client.updateZone(zone.id, request),
+      successMessage: 'Traseul a fost salvat',
+      errorPrefix: 'Salvarea traseului a esuat',
+    );
   }
 
   Future<void> _stopWatering() async {
@@ -411,6 +516,53 @@ class _IrrigationHomeState extends State<IrrigationHome> {
     );
     await _loadSnapshot();
   }
+
+  Future<bool> _confirmDelete({
+    required String title,
+    required String message,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Anuleaza'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sterge'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _runWrite(
+    Future<WriteResult> Function() action, {
+    required String successMessage,
+    required String errorPrefix,
+  }) async {
+    try {
+      await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
+      await _loadSnapshot();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$errorPrefix: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
 }
 
 class _ScreenBody extends StatelessWidget {
@@ -422,8 +574,15 @@ class _ScreenBody extends StatelessWidget {
     required this.onRetry,
     required this.executingManualProgramId,
     required this.onExecuteManualProgram,
+    required this.executingScheduleId,
+    required this.onExecuteSchedule,
+    required this.onAddSchedule,
+    required this.onEditSchedule,
+    required this.onDeleteSchedule,
+    required this.onEditManualProgram,
     required this.testingZoneId,
     required this.onTestZone,
+    required this.onEditZone,
     required this.isStopping,
     required this.onStop,
     required this.apiSettings,
@@ -438,8 +597,15 @@ class _ScreenBody extends StatelessWidget {
   final VoidCallback onRetry;
   final int? executingManualProgramId;
   final ValueChanged<ManualProgram> onExecuteManualProgram;
+  final int? executingScheduleId;
+  final ValueChanged<ScheduleProgram> onExecuteSchedule;
+  final VoidCallback onAddSchedule;
+  final ValueChanged<ScheduleProgram> onEditSchedule;
+  final ValueChanged<ScheduleProgram> onDeleteSchedule;
+  final ValueChanged<ManualProgram> onEditManualProgram;
   final int? testingZoneId;
   final ValueChanged<IrrigationZone> onTestZone;
+  final ValueChanged<IrrigationZone> onEditZone;
   final bool isStopping;
   final VoidCallback onStop;
   final ApiSettings apiSettings;
@@ -471,16 +637,25 @@ class _ScreenBody extends StatelessWidget {
         isStopping: isStopping,
         onStop: onStop,
       ),
-      1 => ScheduleScreen(snapshot: snapshot),
+      1 => ScheduleScreen(
+        snapshot: snapshot,
+        executingScheduleId: executingScheduleId,
+        onExecuteSchedule: onExecuteSchedule,
+        onAddSchedule: onAddSchedule,
+        onEditSchedule: onEditSchedule,
+        onDeleteSchedule: onDeleteSchedule,
+      ),
       2 => ManualScreen(
         snapshot: snapshot,
         executingProgramId: executingManualProgramId,
         onExecuteProgram: onExecuteManualProgram,
+        onEditProgram: onEditManualProgram,
       ),
       3 => ZonesScreen(
         snapshot: snapshot,
         testingZoneId: testingZoneId,
         onTestZone: onTestZone,
+        onEditZone: onEditZone,
       ),
       _ => DashboardScreen(
         snapshot: snapshot,
@@ -650,9 +825,22 @@ class _ErrorState extends StatelessWidget {
 }
 
 class ScheduleScreen extends StatelessWidget {
-  const ScheduleScreen({super.key, required this.snapshot});
+  const ScheduleScreen({
+    super.key,
+    required this.snapshot,
+    required this.executingScheduleId,
+    required this.onExecuteSchedule,
+    required this.onAddSchedule,
+    required this.onEditSchedule,
+    required this.onDeleteSchedule,
+  });
 
   final IrrigationSnapshot snapshot;
+  final int? executingScheduleId;
+  final ValueChanged<ScheduleProgram> onExecuteSchedule;
+  final VoidCallback onAddSchedule;
+  final ValueChanged<ScheduleProgram> onEditSchedule;
+  final ValueChanged<ScheduleProgram> onDeleteSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -661,13 +849,8 @@ class ScheduleScreen extends StatelessWidget {
       action: Wrap(
         spacing: 8,
         children: [
-          FilledButton.tonalIcon(
-            onPressed: () {},
-            icon: const Icon(Icons.sync_rounded),
-            label: const Text('Reload'),
-          ),
           FilledButton.icon(
-            onPressed: () {},
+            onPressed: onAddSchedule,
             icon: const Icon(Icons.add_rounded),
             label: const Text('Adauga'),
           ),
@@ -675,7 +858,15 @@ class ScheduleScreen extends StatelessWidget {
       ),
       child: Column(
         children: snapshot.schedules
-            .map((schedule) => _ScheduleRow(schedule: schedule))
+            .map(
+              (schedule) => _ScheduleRow(
+                schedule: schedule,
+                isExecuting: executingScheduleId == schedule.id,
+                onExecute: () => onExecuteSchedule(schedule),
+                onEdit: () => onEditSchedule(schedule),
+                onDelete: () => onDeleteSchedule(schedule),
+              ),
+            )
             .toList(),
       ),
     );
@@ -688,11 +879,13 @@ class ManualScreen extends StatelessWidget {
     required this.snapshot,
     required this.executingProgramId,
     required this.onExecuteProgram,
+    required this.onEditProgram,
   });
 
   final IrrigationSnapshot snapshot;
   final int? executingProgramId;
   final ValueChanged<ManualProgram> onExecuteProgram;
+  final ValueChanged<ManualProgram> onEditProgram;
 
   @override
   Widget build(BuildContext context) {
@@ -704,6 +897,7 @@ class ManualScreen extends StatelessWidget {
               program: program,
               isExecuting: executingProgramId == program.id,
               onExecute: () => onExecuteProgram(program),
+              onEdit: () => onEditProgram(program),
             ),
           )
           .toList(),
@@ -717,21 +911,18 @@ class ZonesScreen extends StatelessWidget {
     required this.snapshot,
     required this.testingZoneId,
     required this.onTestZone,
+    required this.onEditZone,
   });
 
   final IrrigationSnapshot snapshot;
   final int? testingZoneId;
   final ValueChanged<IrrigationZone> onTestZone;
+  final ValueChanged<IrrigationZone> onEditZone;
 
   @override
   Widget build(BuildContext context) {
     return _Panel(
       title: 'Trasee',
-      action: FilledButton.icon(
-        onPressed: () {},
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Adauga'),
-      ),
       child: Column(
         children: snapshot.zones
             .map(
@@ -739,6 +930,7 @@ class ZonesScreen extends StatelessWidget {
                 zone: zone,
                 isTesting: testingZoneId == zone.id,
                 onTest: () => onTestZone(zone),
+                onEdit: () => onEditZone(zone),
               ),
             )
             .toList(),
@@ -859,6 +1051,464 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
         apiUrl: _apiUrlController.text,
         apiToken: _apiTokenController.text,
       ),
+    );
+  }
+}
+
+class ZoneDialog extends StatefulWidget {
+  const ZoneDialog({super.key, this.zone});
+
+  final IrrigationZone? zone;
+
+  @override
+  State<ZoneDialog> createState() => _ZoneDialogState();
+}
+
+class _ZoneDialogState extends State<ZoneDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late ZoneType _type;
+  late bool _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    final zone = widget.zone;
+    _nameController = TextEditingController(text: zone?.name ?? '');
+    _type = zone?.type ?? ZoneType.sprinkler;
+    _enabled = zone?.enabled ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final editing = widget.zone != null;
+
+    return AlertDialog(
+      title: Text(editing ? 'Editeaza traseu' : 'Adauga traseu'),
+      content: SizedBox(
+        width: 480,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nume',
+                  prefixIcon: Icon(Icons.label_rounded),
+                  border: OutlineInputBorder(),
+                ),
+                validator: _requiredText,
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<ZoneType>(
+                initialValue: _type,
+                decoration: const InputDecoration(
+                  labelText: 'Tip',
+                  prefixIcon: Icon(Icons.alt_route_rounded),
+                  border: OutlineInputBorder(),
+                ),
+                items: ZoneType.values
+                    .map(
+                      (type) => DropdownMenuItem(
+                        value: type,
+                        child: Text(type.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) =>
+                    setState(() => _type = value ?? ZoneType.sprinkler),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Activ'),
+                value: _enabled,
+                onChanged: (value) => setState(() => _enabled = value),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Anuleaza'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(editing ? 'Salveaza' : 'Adauga'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      ZoneWriteRequest(
+        name: _nameController.text.trim(),
+        type: _type,
+        enabled: _enabled,
+      ),
+    );
+  }
+}
+
+class ScheduleDialog extends StatefulWidget {
+  const ScheduleDialog({super.key, required this.zones, this.schedule});
+
+  final List<IrrigationZone> zones;
+  final ScheduleProgram? schedule;
+
+  @override
+  State<ScheduleDialog> createState() => _ScheduleDialogState();
+}
+
+class _ScheduleDialogState extends State<ScheduleDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _monthController;
+  late final TextEditingController _dayOfMonthController;
+  late final TextEditingController _dayOfWeekController;
+  late final TextEditingController _hourController;
+  late final TextEditingController _minuteController;
+  late final TextEditingController _durationController;
+  late final TextEditingController _maxRainController;
+  late int _zoneId;
+  late bool _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    final schedule = widget.schedule;
+    _zoneId =
+        schedule?.zone.id ?? (widget.zones.isEmpty ? 0 : widget.zones.first.id);
+    _enabled = schedule?.enabled ?? true;
+    _monthController = TextEditingController(text: schedule?.month ?? '*');
+    _dayOfMonthController = TextEditingController(
+      text: schedule?.dayOfMonth ?? '*',
+    );
+    _dayOfWeekController = TextEditingController(
+      text: schedule?.dayOfWeek ?? '*',
+    );
+    _hourController = TextEditingController(text: schedule?.hour ?? '6');
+    _minuteController = TextEditingController(text: schedule?.minute ?? '0');
+    _durationController = TextEditingController(
+      text: (schedule?.durationMinutes ?? 10).toString(),
+    );
+    _maxRainController = TextEditingController(
+      text: (schedule?.maxRainMm ?? 0).toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _monthController.dispose();
+    _dayOfMonthController.dispose();
+    _dayOfWeekController.dispose();
+    _hourController.dispose();
+    _minuteController.dispose();
+    _durationController.dispose();
+    _maxRainController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final editing = widget.schedule != null;
+
+    return AlertDialog(
+      title: Text(editing ? 'Editeaza programare' : 'Adauga programare'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<int>(
+                  initialValue: _zoneId == 0 ? null : _zoneId,
+                  decoration: const InputDecoration(
+                    labelText: 'Traseu',
+                    prefixIcon: Icon(Icons.alt_route_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: widget.zones
+                      .map(
+                        (zone) => DropdownMenuItem(
+                          value: zone.id,
+                          child: Text(zone.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _zoneId = value ?? 0),
+                  validator: (value) =>
+                      value == null ? 'Alege un traseu' : null,
+                ),
+                const SizedBox(height: 14),
+                _TwoColumnFields(
+                  children: [
+                    _textField(
+                      _monthController,
+                      'Luna',
+                      Icons.calendar_view_month_rounded,
+                    ),
+                    _textField(
+                      _dayOfMonthController,
+                      'Zi luna',
+                      Icons.today_rounded,
+                    ),
+                    _textField(
+                      _dayOfWeekController,
+                      'Zi saptamana',
+                      Icons.date_range_rounded,
+                    ),
+                    _textField(_hourController, 'Ora', Icons.schedule_rounded),
+                    _textField(
+                      _minuteController,
+                      'Minut',
+                      Icons.more_time_rounded,
+                    ),
+                    TextFormField(
+                      controller: _durationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Durata minute',
+                        prefixIcon: Icon(Icons.timer_rounded),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) => _positiveInt(value, max: 120),
+                    ),
+                    TextFormField(
+                      controller: _maxRainController,
+                      decoration: const InputDecoration(
+                        labelText: 'Ploaie max mm',
+                        prefixIcon: Icon(Icons.cloudy_snowing),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: _nonNegativeDouble,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Activ'),
+                  value: _enabled,
+                  onChanged: (value) => setState(() => _enabled = value),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Anuleaza'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(editing ? 'Salveaza' : 'Adauga'),
+        ),
+      ],
+    );
+  }
+
+  Widget _textField(
+    TextEditingController controller,
+    String label,
+    IconData icon,
+  ) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: const OutlineInputBorder(),
+      ),
+      validator: _requiredText,
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      ScheduleWriteRequest(
+        zoneId: _zoneId,
+        month: _monthController.text.trim(),
+        dayOfMonth: _dayOfMonthController.text.trim(),
+        dayOfWeek: _dayOfWeekController.text.trim(),
+        hour: _hourController.text.trim(),
+        minute: _minuteController.text.trim(),
+        durationMinutes: int.parse(_durationController.text.trim()),
+        maxRainMm: double.parse(_maxRainController.text.trim()),
+        enabled: _enabled,
+      ),
+    );
+  }
+}
+
+class ManualProgramDialog extends StatefulWidget {
+  const ManualProgramDialog({super.key, required this.zones, this.program});
+
+  final List<IrrigationZone> zones;
+  final ManualProgram? program;
+
+  @override
+  State<ManualProgramDialog> createState() => _ManualProgramDialogState();
+}
+
+class _ManualProgramDialogState extends State<ManualProgramDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final Map<int, TextEditingController> _durationControllers;
+
+  @override
+  void initState() {
+    super.initState();
+    final program = widget.program;
+    _nameController = TextEditingController(text: program?.name ?? '');
+    final existingDurations = {
+      for (final entry
+          in program?.zoneDurations.entries ??
+              const <MapEntry<IrrigationZone, int>>[])
+        entry.key.id: entry.value,
+    };
+    _durationControllers = {
+      for (final zone in widget.zones)
+        zone.id: TextEditingController(
+          text: (existingDurations[zone.id] ?? 0).toString(),
+        ),
+    };
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    for (final controller in _durationControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final editing = widget.program != null;
+
+    return AlertDialog(
+      title: Text(
+        editing ? 'Editeaza program manual' : 'Adauga program manual',
+      ),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nume',
+                    prefixIcon: Icon(Icons.label_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _requiredText,
+                ),
+                const SizedBox(height: 14),
+                ...widget.zones.map(
+                  (zone) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextFormField(
+                      controller: _durationControllers[zone.id],
+                      decoration: InputDecoration(
+                        labelText: '${zone.name} minute',
+                        prefixIcon: Icon(zone.icon),
+                        border: const OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) => _nonNegativeInt(value, max: 120),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Anuleaza'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(editing ? 'Salveaza' : 'Adauga'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(
+      ManualProgramWriteRequest(
+        name: _nameController.text.trim(),
+        zoneDurations: {
+          for (final entry in _durationControllers.entries)
+            entry.key: int.parse(entry.value.text.trim()),
+        },
+      ),
+    );
+  }
+}
+
+class _TwoColumnFields extends StatelessWidget {
+  const _TwoColumnFields({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 520) {
+          return Column(
+            children: [
+              for (final child in children) ...[
+                child,
+                const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: children
+              .map(
+                (child) => SizedBox(
+                  width: (constraints.maxWidth - 12) / 2,
+                  child: child,
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 }
@@ -1182,82 +1832,111 @@ class _RuntimeDetails extends StatelessWidget {
 }
 
 class _ScheduleRow extends StatelessWidget {
-  const _ScheduleRow({required this.schedule});
+  const _ScheduleRow({
+    required this.schedule,
+    required this.isExecuting,
+    required this.onExecute,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final ScheduleProgram schedule;
+  final bool isExecuting;
+  final VoidCallback onExecute;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final enabled = schedule.enabled && schedule.zone.enabled;
 
     return DecoratedBox(
       decoration: BoxDecoration(
+        color: enabled
+            ? null
+            : colors.surfaceContainerHighest.withValues(alpha: 0.35),
         border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 760;
+      child: Opacity(
+        opacity: enabled ? 1 : 0.62,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
 
-            final summary = Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _InfoChip(Icons.calendar_month_rounded, schedule.cronLabel),
-                _InfoChip(
-                  Icons.timer_rounded,
-                  '${schedule.durationMinutes} min',
-                ),
-                _InfoChip(
-                  Icons.cloudy_snowing,
-                  'max ${schedule.maxRainMm.toStringAsFixed(1)} mm',
-                ),
-                _InfoChip(
-                  Icons.water_drop_outlined,
-                  '${schedule.currentRainMm.toStringAsFixed(1)} mm',
-                ),
-              ],
-            );
-
-            final actions = Wrap(
-              spacing: 8,
-              children: [
-                IconButton.filledTonal(
-                  onPressed: () {},
-                  tooltip: 'Editeaza',
-                  icon: const Icon(Icons.edit_rounded),
-                ),
-                IconButton.filled(
-                  onPressed: () {},
-                  tooltip: 'Executa acum',
-                  icon: const Icon(Icons.play_arrow_rounded),
-                ),
-              ],
-            );
-
-            if (compact) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              final summary = Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  _ScheduleTitle(schedule: schedule),
-                  const SizedBox(height: 12),
-                  summary,
-                  const SizedBox(height: 12),
+                  _StateChip(enabled ? 'activ' : 'inactiv', enabled),
+                  _InfoChip(Icons.calendar_month_rounded, schedule.cronLabel),
+                  _InfoChip(
+                    Icons.timer_rounded,
+                    '${schedule.durationMinutes} min',
+                  ),
+                  _InfoChip(
+                    Icons.cloudy_snowing,
+                    'max ${schedule.maxRainMm.toStringAsFixed(1)} mm',
+                  ),
+                  _InfoChip(
+                    Icons.water_drop_outlined,
+                    '${schedule.currentRainMm.toStringAsFixed(1)} mm',
+                  ),
+                ],
+              );
+
+              final actions = Wrap(
+                spacing: 8,
+                children: [
+                  IconButton.filledTonal(
+                    onPressed: onEdit,
+                    tooltip: 'Editeaza',
+                    icon: const Icon(Icons.edit_rounded),
+                  ),
+                  IconButton.filledTonal(
+                    onPressed: onDelete,
+                    tooltip: 'Sterge',
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+                  IconButton.filled(
+                    onPressed: enabled && !isExecuting ? onExecute : null,
+                    tooltip: 'Executa acum',
+                    icon: isExecuting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.play_arrow_rounded),
+                  ),
+                ],
+              );
+
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ScheduleTitle(schedule: schedule),
+                    const SizedBox(height: 12),
+                    summary,
+                    const SizedBox(height: 12),
+                    actions,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(flex: 3, child: _ScheduleTitle(schedule: schedule)),
+                  Expanded(flex: 4, child: summary),
+                  const SizedBox(width: 12),
                   actions,
                 ],
               );
-            }
-
-            return Row(
-              children: [
-                Expanded(flex: 3, child: _ScheduleTitle(schedule: schedule)),
-                Expanded(flex: 4, child: summary),
-                const SizedBox(width: 12),
-                actions,
-              ],
-            );
-          },
+            },
+          ),
         ),
       ),
     );
@@ -1305,11 +1984,13 @@ class _ManualProgramCard extends StatelessWidget {
     required this.program,
     required this.isExecuting,
     required this.onExecute,
+    required this.onEdit,
   });
 
   final ManualProgram program;
   final bool isExecuting;
   final VoidCallback onExecute;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1336,6 +2017,11 @@ class _ManualProgramCard extends StatelessWidget {
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
+              ),
+              IconButton.filledTonal(
+                onPressed: onEdit,
+                tooltip: 'Editeaza',
+                icon: const Icon(Icons.edit_rounded),
               ),
               FilledButton.icon(
                 onPressed: isExecuting ? null : onExecute,
@@ -1410,43 +2096,57 @@ class _ZoneEditorRow extends StatelessWidget {
     required this.zone,
     required this.isTesting,
     required this.onTest,
+    required this.onEdit,
   });
 
   final IrrigationZone zone;
   final bool isTesting;
   final VoidCallback onTest;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: zone.color.withValues(alpha: 0.16),
-        child: Icon(zone.icon, color: zone.color),
+    final colors = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: zone.enabled
+            ? null
+            : colors.surfaceContainerHighest.withValues(alpha: 0.35),
       ),
-      title: Text(zone.name),
-      subtitle: Text(zone.type.label),
-      trailing: Wrap(
-        spacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          _StateChip(zone.enabled ? 'activ' : 'inactiv', zone.enabled),
-          IconButton.filled(
-            onPressed: isTesting ? null : onTest,
-            tooltip: 'Testeaza zona',
-            icon: isTesting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.play_arrow_rounded),
+      child: Opacity(
+        opacity: zone.enabled ? 1 : 0.62,
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: zone.color.withValues(alpha: 0.16),
+            child: Icon(zone.icon, color: zone.color),
           ),
-          IconButton.filledTonal(
-            onPressed: () {},
-            tooltip: 'Editeaza',
-            icon: const Icon(Icons.edit_rounded),
+          title: Text(zone.name),
+          subtitle: Text(zone.type.label),
+          trailing: Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _StateChip(zone.enabled ? 'activ' : 'inactiv', zone.enabled),
+              IconButton.filled(
+                onPressed: zone.enabled && !isTesting ? onTest : null,
+                tooltip: 'Testeaza zona',
+                icon: isTesting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.play_arrow_rounded),
+              ),
+              IconButton.filledTonal(
+                onPressed: onEdit,
+                tooltip: 'Editeaza',
+                icon: const Icon(Icons.edit_rounded),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1659,6 +2359,7 @@ enum ZoneType { sprinkler, drip }
 
 extension on ZoneType {
   String get label => this == ZoneType.sprinkler ? 'Aspersor' : 'Picurator';
+  String get apiValue => this == ZoneType.sprinkler ? 'sprinkler' : 'drip';
 }
 
 class IrrigationZone {
@@ -1705,6 +2406,7 @@ class ScheduleProgram {
     required this.durationMinutes,
     required this.maxRainMm,
     required this.currentRainMm,
+    required this.enabled,
   });
 
   final int id;
@@ -1717,6 +2419,7 @@ class ScheduleProgram {
   final int durationMinutes;
   final double maxRainMm;
   final double currentRainMm;
+  final bool enabled;
 
   String get cronLabel {
     final days = dayOfWeek == '*' ? 'zilnic' : 'DOW $dayOfWeek';
@@ -1741,6 +2444,7 @@ class ScheduleProgram {
       durationMinutes: _asInt(json['duration_minutes']),
       maxRainMm: _asDouble(json['max_rain_mm'], fallback: 0),
       currentRainMm: _asDouble(json['current_rain_mm'], fallback: 0),
+      enabled: _asBool(json['enabled'], fallback: true),
     );
   }
 }
@@ -1775,6 +2479,92 @@ class ManualProgram {
       zoneDurations: durations,
     );
   }
+}
+
+class WriteResult {
+  const WriteResult({required this.id, required this.message});
+
+  final int id;
+  final String message;
+
+  factory WriteResult.fromJson(Map<String, dynamic> json) {
+    return WriteResult(
+      id: _asInt(json['id']),
+      message: _asString(json['message'], fallback: 'ok'),
+    );
+  }
+}
+
+class ZoneWriteRequest {
+  const ZoneWriteRequest({
+    required this.name,
+    required this.type,
+    required this.enabled,
+  });
+
+  final String name;
+  final ZoneType type;
+  final bool enabled;
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.apiValue,
+    'enabled': enabled,
+  };
+}
+
+class ScheduleWriteRequest {
+  const ScheduleWriteRequest({
+    required this.zoneId,
+    required this.month,
+    required this.dayOfMonth,
+    required this.dayOfWeek,
+    required this.hour,
+    required this.minute,
+    required this.durationMinutes,
+    required this.maxRainMm,
+    required this.enabled,
+  });
+
+  final int zoneId;
+  final String month;
+  final String dayOfMonth;
+  final String dayOfWeek;
+  final String hour;
+  final String minute;
+  final int durationMinutes;
+  final double maxRainMm;
+  final bool enabled;
+
+  Map<String, Object?> toJson() => {
+    'zone_id': zoneId,
+    'month': month,
+    'day_of_month': dayOfMonth,
+    'day_of_week': dayOfWeek,
+    'hour': hour,
+    'minute': minute,
+    'duration_minutes': durationMinutes,
+    'max_rain_mm': maxRainMm,
+    'enabled': enabled,
+  };
+}
+
+class ManualProgramWriteRequest {
+  const ManualProgramWriteRequest({
+    required this.name,
+    required this.zoneDurations,
+  });
+
+  final String name;
+  final Map<int, int> zoneDurations;
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'zone_durations': {
+      for (final entry in zoneDurations.entries)
+        entry.key.toString(): entry.value,
+    },
+  };
 }
 
 class IrrigationDataClient {
@@ -1837,6 +2627,91 @@ class IrrigationDataClient {
     return CommandResult.fromJson(decoded);
   }
 
+  Future<CommandResult> executeSchedule(int scheduleId) async {
+    final uri = Uri.parse('$apiBaseUrl/api/schedules/$scheduleId/execute');
+    final response = await _httpClient.post(uri, headers: _headers());
+    final decoded = _decodeApiObject(response);
+
+    return CommandResult.fromJson(decoded);
+  }
+
+  Future<WriteResult> createZone(ZoneWriteRequest request) {
+    return _postWrite('/api/zones', request.toJson());
+  }
+
+  Future<WriteResult> updateZone(int zoneId, ZoneWriteRequest request) {
+    return _patchWrite('/api/zones/$zoneId', request.toJson());
+  }
+
+  Future<WriteResult> deleteZone(int zoneId) {
+    return _deleteWrite('/api/zones/$zoneId');
+  }
+
+  Future<WriteResult> createSchedule(ScheduleWriteRequest request) {
+    return _postWrite('/api/schedules', request.toJson());
+  }
+
+  Future<WriteResult> updateSchedule(
+    int scheduleId,
+    ScheduleWriteRequest request,
+  ) {
+    return _patchWrite('/api/schedules/$scheduleId', request.toJson());
+  }
+
+  Future<WriteResult> deleteSchedule(int scheduleId) {
+    return _deleteWrite('/api/schedules/$scheduleId');
+  }
+
+  Future<WriteResult> createManualProgram(ManualProgramWriteRequest request) {
+    return _postWrite('/api/manual', request.toJson());
+  }
+
+  Future<WriteResult> updateManualProgram(
+    int programId,
+    ManualProgramWriteRequest request,
+  ) {
+    return _patchWrite('/api/manual/$programId', request.toJson());
+  }
+
+  Future<WriteResult> deleteManualProgram(int programId) {
+    return _deleteWrite('/api/manual/$programId');
+  }
+
+  Future<WriteResult> _postWrite(String path, Map<String, Object?> body) async {
+    final uri = Uri.parse('$apiBaseUrl$path');
+    final response = await _httpClient.post(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode(body),
+    );
+    final decoded = _decodeApiObject(response);
+
+    return WriteResult.fromJson(decoded);
+  }
+
+  Future<WriteResult> _patchWrite(
+    String path,
+    Map<String, Object?> body,
+  ) async {
+    final uri = Uri.parse('$apiBaseUrl$path');
+    final response = await _httpClient.patch(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode(body),
+    );
+    final decoded = _decodeApiObject(response);
+
+    return WriteResult.fromJson(decoded);
+  }
+
+  Future<WriteResult> _deleteWrite(String path) async {
+    final uri = Uri.parse('$apiBaseUrl$path');
+    final response = await _httpClient.delete(uri, headers: _headers());
+    final decoded = _decodeApiObject(response);
+
+    return WriteResult.fromJson(decoded);
+  }
+
   Map<String, dynamic> _decodeApiObject(
     http.Response response, {
     bool allowApplicationError = false,
@@ -1877,7 +2752,7 @@ class CommandResult {
     final gateway = _asMap(json['gateway']);
     return CommandResult(
       command: _asString(
-        gateway['command'],
+        gateway['command'] ?? json['command'],
         fallback: 'EXEC ${json['program_id']}',
       ),
     );
@@ -2084,6 +2959,7 @@ class IrrigationSnapshot {
           durationMinutes: 12,
           maxRainMm: 4,
           currentRainMm: 2.8,
+          enabled: true,
         ),
         ScheduleProgram(
           id: 14,
@@ -2096,6 +2972,7 @@ class IrrigationSnapshot {
           durationMinutes: 8,
           maxRainMm: 3.5,
           currentRainMm: 2.8,
+          enabled: true,
         ),
         ScheduleProgram(
           id: 19,
@@ -2108,6 +2985,7 @@ class IrrigationSnapshot {
           durationMinutes: 15,
           maxRainMm: 6,
           currentRainMm: 2.8,
+          enabled: false,
         ),
       ],
       manualPrograms: [
@@ -2165,7 +3043,10 @@ DaemonState _daemonStateFromString(Object? value) {
 }
 
 ZoneType _zoneTypeFromDatabaseValue(Object? value) {
-  return value == 2 || value == '2' ? ZoneType.drip : ZoneType.sprinkler;
+  final text = _asString(value).toLowerCase();
+  return value == 2 || text == '2' || text == 'drip' || text == 'picurator'
+      ? ZoneType.drip
+      : ZoneType.sprinkler;
 }
 
 Map<String, dynamic> _asMap(Object? value) {
@@ -2211,6 +3092,30 @@ bool _asBool(Object? value, {bool fallback = false}) {
   if (text == 'true' || text == '1' || text == 'yes') return true;
   if (text == 'false' || text == '0' || text == 'no') return false;
   return fallback;
+}
+
+String? _requiredText(String? value) {
+  return value == null || value.trim().isEmpty ? 'Camp obligatoriu' : null;
+}
+
+String? _positiveInt(String? value, {int? max}) {
+  final parsed = int.tryParse(value?.trim() ?? '');
+  if (parsed == null || parsed <= 0) return 'Introdu un numar pozitiv';
+  if (max != null && parsed > max) return 'Maxim $max';
+  return null;
+}
+
+String? _nonNegativeInt(String? value, {int? max}) {
+  final parsed = int.tryParse(value?.trim() ?? '');
+  if (parsed == null || parsed < 0) return 'Introdu zero sau mai mult';
+  if (max != null && parsed > max) return 'Maxim $max';
+  return null;
+}
+
+String? _nonNegativeDouble(String? value) {
+  final parsed = double.tryParse(value?.trim() ?? '');
+  if (parsed == null || parsed < 0) return 'Introdu zero sau mai mult';
+  return null;
 }
 
 String _trimTrailingSlash(String value) {
