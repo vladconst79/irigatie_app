@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,9 @@ Future<void> main() async {
 class ApiSettings {
   const ApiSettings({required this.apiUrl, required this.apiToken});
 
+  static const _apiUrlKey = 'irigatie.apiUrl';
+  static const _apiTokenKey = 'irigatie.apiToken';
+
   final String apiUrl;
   final String apiToken;
 
@@ -23,6 +27,20 @@ class ApiSettings {
   );
 
   static Future<ApiSettings> load() async {
+    final assetSettings = await _loadAsset();
+    final preferences = await SharedPreferences.getInstance();
+    final savedApiUrl = preferences.getString(_apiUrlKey);
+    final savedApiToken = preferences.getString(_apiTokenKey);
+
+    return ApiSettings(
+      apiUrl: _trimTrailingSlash(
+        _asString(savedApiUrl, fallback: assetSettings.apiUrl),
+      ),
+      apiToken: _asString(savedApiToken, fallback: assetSettings.apiToken),
+    );
+  }
+
+  static Future<ApiSettings> _loadAsset() async {
     try {
       final raw = await rootBundle.loadString(
         'assets/config/irigatie_app.json',
@@ -47,6 +65,18 @@ class ApiSettings {
     } catch (_) {
       return fromEnvironment;
     }
+  }
+
+  Future<void> save() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_apiUrlKey, _trimTrailingSlash(apiUrl));
+    await preferences.setString(_apiTokenKey, apiToken);
+  }
+
+  Future<void> clearSaved() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_apiUrlKey);
+    await preferences.remove(_apiTokenKey);
   }
 }
 
@@ -104,7 +134,8 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   static const _pollInterval = Duration(seconds: 3);
 
   int _selectedIndex = 0;
-  late final IrrigationDataClient _client;
+  late ApiSettings _apiSettings;
+  late IrrigationDataClient _client;
   IrrigationSnapshot? _snapshot;
   String? _loadError;
   bool _isLoading = true;
@@ -115,7 +146,8 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   @override
   void initState() {
     super.initState();
-    _client = IrrigationDataClient(apiSettings: widget.apiSettings);
+    _apiSettings = widget.apiSettings;
+    _client = IrrigationDataClient(apiSettings: _apiSettings);
     final initialSnapshot = widget.initialSnapshot;
     if (initialSnapshot != null) {
       _snapshot = initialSnapshot;
@@ -179,6 +211,9 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                         onRetry: _loadSnapshot,
                         executingManualProgramId: _executingManualProgramId,
                         onExecuteManualProgram: _executeManualProgram,
+                        apiSettings: _apiSettings,
+                        onSaveApiSettings: _saveApiSettings,
+                        onResetApiSettings: _resetApiSettings,
                       ),
                     ),
                   ),
@@ -265,6 +300,43 @@ class _IrrigationHomeState extends State<IrrigationHome> {
       }
     }
   }
+
+  Future<void> _saveApiSettings(ApiSettings settings) async {
+    final updated = ApiSettings(
+      apiUrl: _trimTrailingSlash(settings.apiUrl),
+      apiToken: settings.apiToken,
+    );
+    await updated.save();
+    _client.close();
+    _client = IrrigationDataClient(apiSettings: updated);
+    if (!mounted) return;
+    setState(() {
+      _apiSettings = updated;
+      _snapshot = null;
+      _loadError = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Configuratia a fost salvata')),
+    );
+    await _loadSnapshot();
+  }
+
+  Future<void> _resetApiSettings() async {
+    await _apiSettings.clearSaved();
+    final loaded = await ApiSettings.load();
+    _client.close();
+    _client = IrrigationDataClient(apiSettings: loaded);
+    if (!mounted) return;
+    setState(() {
+      _apiSettings = loaded;
+      _snapshot = null;
+      _loadError = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Configuratia a fost resetata')),
+    );
+    await _loadSnapshot();
+  }
 }
 
 class _ScreenBody extends StatelessWidget {
@@ -276,6 +348,9 @@ class _ScreenBody extends StatelessWidget {
     required this.onRetry,
     required this.executingManualProgramId,
     required this.onExecuteManualProgram,
+    required this.apiSettings,
+    required this.onSaveApiSettings,
+    required this.onResetApiSettings,
   });
 
   final int selectedIndex;
@@ -285,9 +360,20 @@ class _ScreenBody extends StatelessWidget {
   final VoidCallback onRetry;
   final int? executingManualProgramId;
   final ValueChanged<ManualProgram> onExecuteManualProgram;
+  final ApiSettings apiSettings;
+  final ValueChanged<ApiSettings> onSaveApiSettings;
+  final VoidCallback onResetApiSettings;
 
   @override
   Widget build(BuildContext context) {
+    if (selectedIndex == 4) {
+      return ConfigurationScreen(
+        settings: apiSettings,
+        onSave: onSaveApiSettings,
+        onReset: onResetApiSettings,
+      );
+    }
+
     if (isLoading && snapshot.zones.isEmpty) {
       return const _LoadingState();
     }
@@ -305,7 +391,8 @@ class _ScreenBody extends StatelessWidget {
         executingProgramId: executingManualProgramId,
         onExecuteProgram: onExecuteManualProgram,
       ),
-      _ => ZonesScreen(snapshot: snapshot),
+      3 => ZonesScreen(snapshot: snapshot),
+      _ => DashboardScreen(snapshot: snapshot),
     };
   }
 }
@@ -535,6 +622,122 @@ class ZonesScreen extends StatelessWidget {
         children: snapshot.zones
             .map((zone) => _ZoneEditorRow(zone: zone))
             .toList(),
+      ),
+    );
+  }
+}
+
+class ConfigurationScreen extends StatefulWidget {
+  const ConfigurationScreen({
+    super.key,
+    required this.settings,
+    required this.onSave,
+    required this.onReset,
+  });
+
+  final ApiSettings settings;
+  final ValueChanged<ApiSettings> onSave;
+  final VoidCallback onReset;
+
+  @override
+  State<ConfigurationScreen> createState() => _ConfigurationScreenState();
+}
+
+class _ConfigurationScreenState extends State<ConfigurationScreen> {
+  late final TextEditingController _apiUrlController;
+  late final TextEditingController _apiTokenController;
+  bool _showToken = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiUrlController = TextEditingController(text: widget.settings.apiUrl);
+    _apiTokenController = TextEditingController(text: widget.settings.apiToken);
+  }
+
+  @override
+  void didUpdateWidget(ConfigurationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings.apiUrl != widget.settings.apiUrl) {
+      _apiUrlController.text = widget.settings.apiUrl;
+    }
+    if (oldWidget.settings.apiToken != widget.settings.apiToken) {
+      _apiTokenController.text = widget.settings.apiToken;
+    }
+  }
+
+  @override
+  void dispose() {
+    _apiUrlController.dispose();
+    _apiTokenController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: 'Configuratie API',
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.tonalIcon(
+            onPressed: widget.onReset,
+            icon: const Icon(Icons.restart_alt_rounded),
+            label: const Text('Reset'),
+          ),
+          FilledButton.icon(
+            onPressed: _save,
+            icon: const Icon(Icons.save_rounded),
+            label: const Text('Salveaza'),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _apiUrlController,
+              decoration: const InputDecoration(
+                labelText: 'API URL',
+                prefixIcon: Icon(Icons.link_rounded),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _apiTokenController,
+              obscureText: !_showToken,
+              decoration: InputDecoration(
+                labelText: 'API token',
+                prefixIcon: const Icon(Icons.key_rounded),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _showToken = !_showToken),
+                  tooltip: _showToken ? 'Ascunde token' : 'Arata token',
+                  icon: Icon(
+                    _showToken
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _save() {
+    widget.onSave(
+      ApiSettings(
+        apiUrl: _apiUrlController.text,
+        apiToken: _apiTokenController.text,
       ),
     );
   }
@@ -1285,6 +1488,11 @@ const _destinations = [
     Icons.play_circle_rounded,
   ),
   _DestinationItem('Trasee', Icons.alt_route_outlined, Icons.alt_route_rounded),
+  _DestinationItem(
+    'Configuratie',
+    Icons.settings_outlined,
+    Icons.settings_rounded,
+  ),
 ];
 
 enum DaemonState { idle, running, stopping, interrupted, error, unknown }

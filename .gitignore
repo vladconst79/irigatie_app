@@ -2,6 +2,8 @@
 *.class
 *.log
 *.pyc
+*.pyo
+*.pyd
 *.swp
 .DS_Store
 .atom/
@@ -28,12 +30,22 @@ migrate_working_dir/
 **/ios/Flutter/.last_build_id
 .dart_tool/
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 .venv/
-/tools/__pycache__/
+__pycache__/
 /build/
 /coverage/
+
+# Flutter generated local files
+/android/local.properties
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Flutter/ephemeral/
+/linux/flutter/ephemeral/
+/macos/Flutter/ephemeral/
+/windows/flutter/ephemeral/
 
 # Symbolication related
 app.*.symbols
@@ -45,4 +57,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local runtime configuration. Track only the sanitized sample.
 /assets/config/irigatie_app.json
+!/assets/config/irigatie_app.sample.json
