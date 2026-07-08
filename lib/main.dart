@@ -45,7 +45,8 @@ class ApiSettings {
         ? savedApiUrl
         : (assetSettings.apiUrl.isNotEmpty ? assetSettings.apiUrl : '/');
 
-    final finalToken = (savedApiToken != null && savedApiToken.trim().isNotEmpty)
+    final finalToken =
+        (savedApiToken != null && savedApiToken.trim().isNotEmpty)
         ? savedApiToken
         : assetSettings.apiToken;
 
@@ -156,6 +157,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   bool _isLoading = true;
   bool _isRefreshing = false;
   int? _executingManualProgramId;
+  int? _testingZoneId;
   Timer? _pollTimer;
 
   @override
@@ -226,6 +228,8 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                         onRetry: _loadSnapshot,
                         executingManualProgramId: _executingManualProgramId,
                         onExecuteManualProgram: _executeManualProgram,
+                        testingZoneId: _testingZoneId,
+                        onTestZone: _testZone,
                         apiSettings: _apiSettings,
                         onSaveApiSettings: _saveApiSettings,
                         onResetApiSettings: _resetApiSettings,
@@ -316,6 +320,32 @@ class _IrrigationHomeState extends State<IrrigationHome> {
     }
   }
 
+  Future<void> _testZone(IrrigationZone zone) async {
+    if (_testingZoneId != null) return;
+
+    setState(() => _testingZoneId = zone.id);
+    try {
+      final command = await _client.executeZoneTest(zone.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Trimis: ${command.command}')));
+      await _loadSnapshot();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Testul a esuat: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _testingZoneId = null);
+      }
+    }
+  }
+
   Future<void> _saveApiSettings(ApiSettings settings) async {
     final updated = ApiSettings(
       apiUrl: _trimTrailingSlash(settings.apiUrl),
@@ -363,6 +393,8 @@ class _ScreenBody extends StatelessWidget {
     required this.onRetry,
     required this.executingManualProgramId,
     required this.onExecuteManualProgram,
+    required this.testingZoneId,
+    required this.onTestZone,
     required this.apiSettings,
     required this.onSaveApiSettings,
     required this.onResetApiSettings,
@@ -375,6 +407,8 @@ class _ScreenBody extends StatelessWidget {
   final VoidCallback onRetry;
   final int? executingManualProgramId;
   final ValueChanged<ManualProgram> onExecuteManualProgram;
+  final int? testingZoneId;
+  final ValueChanged<IrrigationZone> onTestZone;
   final ApiSettings apiSettings;
   final ValueChanged<ApiSettings> onSaveApiSettings;
   final VoidCallback onResetApiSettings;
@@ -406,7 +440,11 @@ class _ScreenBody extends StatelessWidget {
         executingProgramId: executingManualProgramId,
         onExecuteProgram: onExecuteManualProgram,
       ),
-      3 => ZonesScreen(snapshot: snapshot),
+      3 => ZonesScreen(
+        snapshot: snapshot,
+        testingZoneId: testingZoneId,
+        onTestZone: onTestZone,
+      ),
       _ => DashboardScreen(snapshot: snapshot),
     };
   }
@@ -620,9 +658,16 @@ class ManualScreen extends StatelessWidget {
 }
 
 class ZonesScreen extends StatelessWidget {
-  const ZonesScreen({super.key, required this.snapshot});
+  const ZonesScreen({
+    super.key,
+    required this.snapshot,
+    required this.testingZoneId,
+    required this.onTestZone,
+  });
 
   final IrrigationSnapshot snapshot;
+  final int? testingZoneId;
+  final ValueChanged<IrrigationZone> onTestZone;
 
   @override
   Widget build(BuildContext context) {
@@ -635,7 +680,13 @@ class ZonesScreen extends StatelessWidget {
       ),
       child: Column(
         children: snapshot.zones
-            .map((zone) => _ZoneEditorRow(zone: zone))
+            .map(
+              (zone) => _ZoneEditorRow(
+                zone: zone,
+                isTesting: testingZoneId == zone.id,
+                onTest: () => onTestZone(zone),
+              ),
+            )
             .toList(),
       ),
     );
@@ -1301,9 +1352,15 @@ class _DurationBar extends StatelessWidget {
 }
 
 class _ZoneEditorRow extends StatelessWidget {
-  const _ZoneEditorRow({required this.zone});
+  const _ZoneEditorRow({
+    required this.zone,
+    required this.isTesting,
+    required this.onTest,
+  });
 
   final IrrigationZone zone;
+  final bool isTesting;
+  final VoidCallback onTest;
 
   @override
   Widget build(BuildContext context) {
@@ -1319,6 +1376,17 @@ class _ZoneEditorRow extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           _StateChip(zone.enabled ? 'activ' : 'inactiv', zone.enabled),
+          IconButton.filled(
+            onPressed: isTesting ? null : onTest,
+            tooltip: 'Testeaza zona',
+            icon: isTesting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow_rounded),
+          ),
           IconButton.filledTonal(
             onPressed: () {},
             tooltip: 'Editeaza',
@@ -1685,6 +1753,18 @@ class IrrigationDataClient {
       uri,
       headers: _headers(contentTypeJson: true),
       body: jsonEncode({'program_id': programId}),
+    );
+    final decoded = _decodeApiObject(response);
+
+    return CommandResult.fromJson(decoded);
+  }
+
+  Future<CommandResult> executeZoneTest(int zoneId) async {
+    final uri = Uri.parse('$apiBaseUrl/api/zones/test');
+    final response = await _httpClient.post(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode({'zone_id': zoneId}),
     );
     final decoded = _decodeApiObject(response);
 
