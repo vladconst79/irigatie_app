@@ -211,8 +211,6 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                       snapshot: snapshot,
                       isLoading: _isLoading,
                       onRefresh: _loadSnapshot,
-                      isStopping: _isStopping,
-                      onStop: _stopWatering,
                     ),
                   ),
                   SliverPadding(
@@ -233,6 +231,8 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                         onExecuteManualProgram: _executeManualProgram,
                         testingZoneId: _testingZoneId,
                         onTestZone: _testZone,
+                        isStopping: _isStopping,
+                        onStop: _stopWatering,
                         apiSettings: _apiSettings,
                         onSaveApiSettings: _saveApiSettings,
                         onResetApiSettings: _resetApiSettings,
@@ -424,6 +424,8 @@ class _ScreenBody extends StatelessWidget {
     required this.onExecuteManualProgram,
     required this.testingZoneId,
     required this.onTestZone,
+    required this.isStopping,
+    required this.onStop,
     required this.apiSettings,
     required this.onSaveApiSettings,
     required this.onResetApiSettings,
@@ -438,6 +440,8 @@ class _ScreenBody extends StatelessWidget {
   final ValueChanged<ManualProgram> onExecuteManualProgram;
   final int? testingZoneId;
   final ValueChanged<IrrigationZone> onTestZone;
+  final bool isStopping;
+  final VoidCallback onStop;
   final ApiSettings apiSettings;
   final ValueChanged<ApiSettings> onSaveApiSettings;
   final VoidCallback onResetApiSettings;
@@ -462,7 +466,11 @@ class _ScreenBody extends StatelessWidget {
     }
 
     return switch (selectedIndex) {
-      0 => DashboardScreen(snapshot: snapshot),
+      0 => DashboardScreen(
+        snapshot: snapshot,
+        isStopping: isStopping,
+        onStop: onStop,
+      ),
       1 => ScheduleScreen(snapshot: snapshot),
       2 => ManualScreen(
         snapshot: snapshot,
@@ -474,15 +482,26 @@ class _ScreenBody extends StatelessWidget {
         testingZoneId: testingZoneId,
         onTestZone: onTestZone,
       ),
-      _ => DashboardScreen(snapshot: snapshot),
+      _ => DashboardScreen(
+        snapshot: snapshot,
+        isStopping: isStopping,
+        onStop: onStop,
+      ),
     };
   }
 }
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key, required this.snapshot});
+  const DashboardScreen({
+    super.key,
+    required this.snapshot,
+    required this.isStopping,
+    required this.onStop,
+  });
 
   final IrrigationSnapshot snapshot;
+  final bool isStopping;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -540,9 +559,15 @@ class DashboardScreen extends StatelessWidget {
               _Panel(
                 title: 'Runtime',
                 action: FilledButton.tonalIcon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.stop_circle_outlined),
-                  label: const Text('Stop'),
+                  onPressed: isStopping ? null : onStop,
+                  icon: isStopping
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.stop_circle_outlined),
+                  label: Text(isStopping ? 'Stop...' : 'Stop'),
                 ),
                 child: _RuntimeDetails(snapshot: snapshot),
               ),
@@ -844,16 +869,12 @@ class _Header extends StatelessWidget {
     required this.snapshot,
     required this.isLoading,
     required this.onRefresh,
-    required this.isStopping,
-    required this.onStop,
   });
 
   final String title;
   final IrrigationSnapshot snapshot;
   final bool isLoading;
   final VoidCallback onRefresh;
-  final bool isStopping;
-  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -904,21 +925,6 @@ class _Header extends StatelessWidget {
                       )
                     : const Icon(Icons.refresh_rounded),
                 label: const Text('Refresh'),
-              ),
-              FilledButton.icon(
-                onPressed: isStopping ? null : onStop,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Theme.of(context).colorScheme.onError,
-                ),
-                icon: isStopping
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.stop_circle_rounded),
-                label: Text(isStopping ? 'Stop...' : 'Stop'),
               ),
               _StatusPill(
                 icon: Icons.dns_rounded,
