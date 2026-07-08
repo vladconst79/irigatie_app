@@ -27,23 +27,27 @@ class ApiSettings {
   );
 
   static Future<ApiSettings> load() async {
-    // Wrap asset loading in a try/catch since Apache is now blocking it!
     ApiSettings assetSettings;
     try {
       assetSettings = await _loadAsset();
     } catch (e) {
-      // If Apache blocks it (403), fall back to safe production defaults
-      assetSettings = ApiSettings(apiUrl: '/', apiToken: '');
+      // Fall back to an empty string so the URL resolves perfectly to '/api/snapshot'
+      assetSettings = ApiSettings(apiUrl: '', apiToken: '');
     }
 
     final preferences = await SharedPreferences.getInstance();
     final savedApiUrl = preferences.getString(_apiUrlKey);
     final savedApiToken = preferences.getString(_apiTokenKey);
 
-    // Clean up selection: Priority 1 is LocalStorage, Priority 2 is JSON asset, Priority 3 is absolute root '/'
-    final finalUrl = (savedApiUrl != null && savedApiUrl.trim().isNotEmpty)
-        ? savedApiUrl
-        : (assetSettings.apiUrl.isNotEmpty ? assetSettings.apiUrl : '/');
+    // 1. Prioritize local storage if populated
+    // 2. If empty, fall back to asset JSON
+    // 3. Absolute ultimate fallback is an empty string ''
+    String finalUrl = '';
+    if (savedApiUrl != null && savedApiUrl.trim().isNotEmpty) {
+      finalUrl = savedApiUrl;
+    } else if (assetSettings.apiUrl.isNotEmpty) {
+      finalUrl = assetSettings.apiUrl;
+    }
 
     final finalToken =
         (savedApiToken != null && savedApiToken.trim().isNotEmpty)
@@ -51,7 +55,7 @@ class ApiSettings {
         : assetSettings.apiToken;
 
     return ApiSettings(
-      apiUrl: _trimTrailingSlash(finalUrl),
+      apiUrl: _trimTrailingSlash(finalUrl.trim()),
       apiToken: finalToken,
     );
   }
@@ -1871,6 +1875,10 @@ class _ScheduleRow extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _StateChip(enabled ? 'activ' : 'inactiv', enabled),
+                  _InfoChip(
+                    Icons.calendar_view_month_rounded,
+                    schedule.monthLabel,
+                  ),
                   _InfoChip(Icons.calendar_month_rounded, schedule.cronLabel),
                   _InfoChip(
                     Icons.timer_rounded,
@@ -2421,9 +2429,19 @@ class ScheduleProgram {
   final double currentRainMm;
   final bool enabled;
 
+  String get monthLabel => month == '*' ? 'toate lunile' : 'luna $month';
+
+  String get dayLabel {
+    final monthDay = dayOfMonth == '*' ? null : 'zi $dayOfMonth';
+    final weekDay = dayOfWeek == '*' ? null : 'DOW $dayOfWeek';
+
+    if (monthDay == null && weekDay == null) return 'zilnic';
+    if (monthDay != null && weekDay != null) return '$monthDay / $weekDay';
+    return monthDay ?? weekDay!;
+  }
+
   String get cronLabel {
-    final days = dayOfWeek == '*' ? 'zilnic' : 'DOW $dayOfWeek';
-    return '$days · $hour:${minute.padLeft(2, '0')}';
+    return '$dayLabel · $hour:${minute.padLeft(2, '0')}';
   }
 
   factory ScheduleProgram.fromJson(
