@@ -2635,16 +2635,8 @@ class IrrigationDataClient {
     return CommandResult.fromJson(decoded);
   }
 
-  Future<WriteResult> createZone(ZoneWriteRequest request) {
-    return _postWrite('/api/zones', request.toJson());
-  }
-
   Future<WriteResult> updateZone(int zoneId, ZoneWriteRequest request) {
     return _patchWrite('/api/zones/$zoneId', request.toJson());
-  }
-
-  Future<WriteResult> deleteZone(int zoneId) {
-    return _deleteWrite('/api/zones/$zoneId');
   }
 
   Future<WriteResult> createSchedule(ScheduleWriteRequest request) {
@@ -2662,19 +2654,11 @@ class IrrigationDataClient {
     return _deleteWrite('/api/schedules/$scheduleId');
   }
 
-  Future<WriteResult> createManualProgram(ManualProgramWriteRequest request) {
-    return _postWrite('/api/manual', request.toJson());
-  }
-
   Future<WriteResult> updateManualProgram(
     int programId,
     ManualProgramWriteRequest request,
   ) {
     return _patchWrite('/api/manual/$programId', request.toJson());
-  }
-
-  Future<WriteResult> deleteManualProgram(int programId) {
-    return _deleteWrite('/api/manual/$programId');
   }
 
   Future<WriteResult> _postWrite(String path, Map<String, Object?> body) async {
