@@ -27,16 +27,31 @@ class ApiSettings {
   );
 
   static Future<ApiSettings> load() async {
-    final assetSettings = await _loadAsset();
+    // Wrap asset loading in a try/catch since Apache is now blocking it!
+    ApiSettings assetSettings;
+    try {
+      assetSettings = await _loadAsset();
+    } catch (e) {
+      // If Apache blocks it (403), fall back to safe production defaults
+      assetSettings = ApiSettings(apiUrl: '/', apiToken: '');
+    }
+
     final preferences = await SharedPreferences.getInstance();
     final savedApiUrl = preferences.getString(_apiUrlKey);
     final savedApiToken = preferences.getString(_apiTokenKey);
 
+    // Clean up selection: Priority 1 is LocalStorage, Priority 2 is JSON asset, Priority 3 is absolute root '/'
+    final finalUrl = (savedApiUrl != null && savedApiUrl.trim().isNotEmpty)
+        ? savedApiUrl
+        : (assetSettings.apiUrl.isNotEmpty ? assetSettings.apiUrl : '/');
+
+    final finalToken = (savedApiToken != null && savedApiToken.trim().isNotEmpty)
+        ? savedApiToken
+        : assetSettings.apiToken;
+
     return ApiSettings(
-      apiUrl: _trimTrailingSlash(
-        _asString(savedApiUrl, fallback: assetSettings.apiUrl),
-      ),
-      apiToken: _asString(savedApiToken, fallback: assetSettings.apiToken),
+      apiUrl: _trimTrailingSlash(finalUrl),
+      apiToken: finalToken,
     );
   }
 
