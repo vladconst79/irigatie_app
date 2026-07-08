@@ -2,16 +2,63 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
-void main() {
-  runApp(const IrrigationApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final apiSettings = await ApiSettings.load();
+  runApp(IrrigationApp(apiSettings: apiSettings));
+}
+
+class ApiSettings {
+  const ApiSettings({required this.apiUrl, required this.apiToken});
+
+  final String apiUrl;
+  final String apiToken;
+
+  static const fromEnvironment = ApiSettings(
+    apiUrl: String.fromEnvironment('IRIGATIE_API_URL'),
+    apiToken: String.fromEnvironment('IRIGATIE_API_TOKEN'),
+  );
+
+  static Future<ApiSettings> load() async {
+    try {
+      final raw = await rootBundle.loadString(
+        'assets/config/irigatie_app.json',
+      );
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return fromEnvironment;
+      }
+
+      return ApiSettings(
+        apiUrl: _trimTrailingSlash(
+          _asString(
+            decoded['apiUrl'] ?? decoded['api_url'],
+            fallback: fromEnvironment.apiUrl,
+          ),
+        ),
+        apiToken: _asString(
+          decoded['apiToken'] ?? decoded['api_token'],
+          fallback: fromEnvironment.apiToken,
+        ),
+      );
+    } catch (_) {
+      return fromEnvironment;
+    }
+  }
 }
 
 class IrrigationApp extends StatelessWidget {
-  const IrrigationApp({super.key, this.initialSnapshot});
+  const IrrigationApp({
+    super.key,
+    this.initialSnapshot,
+    this.apiSettings = ApiSettings.fromEnvironment,
+  });
 
   final IrrigationSnapshot? initialSnapshot;
+  final ApiSettings apiSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +78,23 @@ class IrrigationApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF3F5F1),
         fontFamily: 'Roboto',
       ),
-      home: IrrigationHome(initialSnapshot: initialSnapshot),
+      home: IrrigationHome(
+        initialSnapshot: initialSnapshot,
+        apiSettings: apiSettings,
+      ),
     );
   }
 }
 
 class IrrigationHome extends StatefulWidget {
-  const IrrigationHome({super.key, this.initialSnapshot});
+  const IrrigationHome({
+    super.key,
+    this.initialSnapshot,
+    required this.apiSettings,
+  });
 
   final IrrigationSnapshot? initialSnapshot;
+  final ApiSettings apiSettings;
 
   @override
   State<IrrigationHome> createState() => _IrrigationHomeState();
@@ -49,7 +104,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   static const _pollInterval = Duration(seconds: 3);
 
   int _selectedIndex = 0;
-  final IrrigationDataClient _client = IrrigationDataClient();
+  late final IrrigationDataClient _client;
   IrrigationSnapshot? _snapshot;
   String? _loadError;
   bool _isLoading = true;
@@ -60,6 +115,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   @override
   void initState() {
     super.initState();
+    _client = IrrigationDataClient(apiSettings: widget.apiSettings);
     final initialSnapshot = widget.initialSnapshot;
     if (initialSnapshot != null) {
       _snapshot = initialSnapshot;
@@ -1379,11 +1435,14 @@ class ManualProgram {
 class IrrigationDataClient {
   IrrigationDataClient({
     http.Client? httpClient,
-    this.apiBaseUrl = _defaultApiBaseUrl,
-  }) : _httpClient = httpClient ?? http.Client();
+    ApiSettings apiSettings = ApiSettings.fromEnvironment,
+  }) : _httpClient = httpClient ?? http.Client(),
+       apiBaseUrl = _trimTrailingSlash(apiSettings.apiUrl),
+       apiToken = apiSettings.apiToken;
 
   final http.Client _httpClient;
   final String apiBaseUrl;
+  final String apiToken;
 
   void close() {
     _httpClient.close();
@@ -1391,8 +1450,8 @@ class IrrigationDataClient {
 
   Future<IrrigationSnapshot> fetchSnapshot() async {
     final uri = Uri.parse('$apiBaseUrl/api/snapshot');
-    final response = await _httpClient.get(uri);
-    final decoded = _decodeApiObject(response);
+    final response = await _httpClient.get(uri, headers: _headers());
+    final decoded = _decodeApiObject(response, allowApplicationError: true);
 
     return IrrigationSnapshot.fromJson(decoded);
   }
@@ -1401,7 +1460,7 @@ class IrrigationDataClient {
     final uri = Uri.parse('$apiBaseUrl/api/manual/execute');
     final response = await _httpClient.post(
       uri,
-      headers: const {'Content-Type': 'application/json'},
+      headers: _headers(contentTypeJson: true),
       body: jsonEncode({'program_id': programId}),
     );
     final decoded = _decodeApiObject(response);
@@ -1409,7 +1468,10 @@ class IrrigationDataClient {
     return CommandResult.fromJson(decoded);
   }
 
-  Map<String, dynamic> _decodeApiObject(http.Response response) {
+  Map<String, dynamic> _decodeApiObject(
+    http.Response response, {
+    bool allowApplicationError = false,
+  }) {
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('API response must be a JSON object');
@@ -1417,7 +1479,7 @@ class IrrigationDataClient {
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
-        decoded['ok'] == false) {
+        (!allowApplicationError && decoded['ok'] == false)) {
       throw StateError(
         _asString(
           decoded['error'],
@@ -1427,6 +1489,13 @@ class IrrigationDataClient {
     }
 
     return decoded;
+  }
+
+  Map<String, String> _headers({bool contentTypeJson = false}) {
+    return {
+      if (contentTypeJson) 'Content-Type': 'application/json',
+      if (apiToken.isNotEmpty) 'Authorization': 'Bearer $apiToken',
+    };
   }
 }
 
@@ -1698,11 +1767,6 @@ class IrrigationSnapshot {
   }
 }
 
-const _defaultApiBaseUrl = String.fromEnvironment(
-  'IRIGATIE_API_URL',
-  defaultValue: 'http://127.0.0.1:8091',
-);
-
 const _zoneColors = [
   Color(0xFF0E7C66),
   Color(0xFF3268A8),
@@ -1778,4 +1842,12 @@ bool _asBool(Object? value, {bool fallback = false}) {
   if (text == 'true' || text == '1' || text == 'yes') return true;
   if (text == 'false' || text == '0' || text == 'no') return false;
   return fallback;
+}
+
+String _trimTrailingSlash(String value) {
+  var trimmed = value.trim();
+  while (trimmed.endsWith('/') && trimmed.length > 1) {
+    trimmed = trimmed.substring(0, trimmed.length - 1);
+  }
+  return trimmed;
 }
