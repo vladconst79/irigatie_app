@@ -156,6 +156,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   String? _loadError;
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _isStopping = false;
   int? _executingManualProgramId;
   int? _testingZoneId;
   Timer? _pollTimer;
@@ -210,6 +211,8 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                       snapshot: snapshot,
                       isLoading: _isLoading,
                       onRefresh: _loadSnapshot,
+                      isStopping: _isStopping,
+                      onStop: _stopWatering,
                     ),
                   ),
                   SliverPadding(
@@ -342,6 +345,32 @@ class _IrrigationHomeState extends State<IrrigationHome> {
     } finally {
       if (mounted) {
         setState(() => _testingZoneId = null);
+      }
+    }
+  }
+
+  Future<void> _stopWatering() async {
+    if (_isStopping) return;
+
+    setState(() => _isStopping = true);
+    try {
+      final command = await _client.stopWatering();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Trimis: ${command.command}')));
+      await _loadSnapshot();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Stop a esuat: $error'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isStopping = false);
       }
     }
   }
@@ -815,12 +844,16 @@ class _Header extends StatelessWidget {
     required this.snapshot,
     required this.isLoading,
     required this.onRefresh,
+    required this.isStopping,
+    required this.onStop,
   });
 
   final String title;
   final IrrigationSnapshot snapshot;
   final bool isLoading;
   final VoidCallback onRefresh;
+  final bool isStopping;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -871,6 +904,21 @@ class _Header extends StatelessWidget {
                       )
                     : const Icon(Icons.refresh_rounded),
                 label: const Text('Refresh'),
+              ),
+              FilledButton.icon(
+                onPressed: isStopping ? null : onStop,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
+                icon: isStopping
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.stop_circle_rounded),
+                label: Text(isStopping ? 'Stop...' : 'Stop'),
               ),
               _StatusPill(
                 icon: Icons.dns_rounded,
@@ -1765,6 +1813,18 @@ class IrrigationDataClient {
       uri,
       headers: _headers(contentTypeJson: true),
       body: jsonEncode({'zone_id': zoneId}),
+    );
+    final decoded = _decodeApiObject(response);
+
+    return CommandResult.fromJson(decoded);
+  }
+
+  Future<CommandResult> stopWatering() async {
+    final uri = Uri.parse('$apiBaseUrl/api/stop');
+    final response = await _httpClient.post(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode(<String, Object?>{}),
     );
     final decoded = _decodeApiObject(response);
 
