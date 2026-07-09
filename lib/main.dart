@@ -704,13 +704,7 @@ class DashboardScreen extends StatelessWidget {
               detail: snapshot.remainingLabel,
               tone: _Tone.blue,
             ),
-            _MetricTile(
-              icon: Icons.cloudy_snowing,
-              title: 'Ultima ploaie',
-              value: '${snapshot.lastRainMm.toStringAsFixed(1)} mm',
-              detail: '${snapshot.lastRainSource} · ${snapshot.lastRainTime}',
-              tone: _Tone.amber,
-            ),
+            _RainfallMetricTile(rainfall: snapshot.rainfall24h),
             _MetricTile(
               icon: Icons.queue_rounded,
               title: 'Coada',
@@ -1758,6 +1752,112 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+class _RainfallMetricTile extends StatelessWidget {
+  const _RainfallMetricTile({required this.rainfall});
+
+  final Rainfall24h rainfall;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _Tone.amber.color(context);
+    final textTheme = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
+    final valueStyle = textTheme.headlineSmall?.copyWith(
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0,
+    );
+    final labelStyle = textTheme.bodyMedium?.copyWith(
+      color: colors.onSurfaceVariant,
+    );
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 148),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Icon(Icons.cloudy_snowing, color: color, size: 28),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Ploaie 24h',
+                style: textTheme.labelLarge?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _RainfallSourceValue(
+                      label: 'Open-Meteo',
+                      value: rainfall.openMeteoLabel,
+                      valueStyle: valueStyle,
+                      labelStyle: labelStyle,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _RainfallSourceValue(
+                      label: 'Hardware',
+                      value: rainfall.hardwareLabel,
+                      valueStyle: valueStyle,
+                      labelStyle: labelStyle,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RainfallSourceValue extends StatelessWidget {
+  const _RainfallSourceValue({
+    required this.label,
+    required this.value,
+    required this.valueStyle,
+    required this.labelStyle,
+  });
+
+  final String label;
+  final String value;
+  final TextStyle? valueStyle;
+  final TextStyle? labelStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: valueStyle,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: labelStyle,
+        ),
+      ],
+    );
+  }
+}
+
 class _RelayList extends StatelessWidget {
   const _RelayList({required this.zones});
 
@@ -2499,6 +2599,82 @@ class ManualProgram {
   }
 }
 
+class Rainfall24h {
+  const Rainfall24h({required this.openMeteoMm, required this.hardwareMm});
+
+  final double openMeteoMm;
+  final double hardwareMm;
+
+  String get openMeteoLabel => '${openMeteoMm.toStringAsFixed(1)} mm';
+
+  String get hardwareLabel => '${hardwareMm.toStringAsFixed(1)} mm';
+
+  static const empty = Rainfall24h(openMeteoMm: 0, hardwareMm: 0);
+
+  factory Rainfall24h.fromJson(
+    Map<String, dynamic> json,
+    Map<String, dynamic> lastRain,
+  ) {
+    final sources = _asMap(json['sources']);
+    final openMeteo = _sourceAmount(
+      json,
+      sources,
+      aliases: const ['openmeteo', 'open_meteo'],
+      directKeys: const ['openmeteo_mm', 'open_meteo_mm'],
+    );
+    final hardware = _sourceAmount(
+      json,
+      sources,
+      aliases: const ['hardware'],
+      directKeys: const ['hardware_mm'],
+    );
+
+    if (openMeteo > 0 || hardware > 0 || json.isNotEmpty) {
+      return Rainfall24h(openMeteoMm: openMeteo, hardwareMm: hardware);
+    }
+
+    final source = _asString(lastRain['source']).toLowerCase();
+    final amount = _asDouble(lastRain['amount_mm'], fallback: 0);
+    if (source == 'openmeteo' || source == 'open_meteo') {
+      return Rainfall24h(openMeteoMm: amount, hardwareMm: 0);
+    }
+    if (source == 'hardware') {
+      return Rainfall24h(openMeteoMm: 0, hardwareMm: amount);
+    }
+
+    return empty;
+  }
+
+  static double _sourceAmount(
+    Map<String, dynamic> json,
+    Map<String, dynamic> sources, {
+    required List<String> aliases,
+    required List<String> directKeys,
+  }) {
+    for (final key in directKeys) {
+      if (json.containsKey(key)) {
+        return _asDouble(json[key], fallback: 0);
+      }
+    }
+
+    for (final alias in aliases) {
+      final rawSource = sources[alias];
+      if (rawSource is Map) {
+        final source = Map<String, dynamic>.from(rawSource);
+        return _asDouble(
+          source['amount_mm'] ?? source['total_mm'] ?? source['mm'],
+          fallback: 0,
+        );
+      }
+      if (rawSource != null) {
+        return _asDouble(rawSource, fallback: 0);
+      }
+    }
+
+    return 0;
+  }
+}
+
 class WriteResult {
   const WriteResult({required this.id, required this.message});
 
@@ -2774,9 +2950,7 @@ class IrrigationSnapshot {
     required this.runtimeCommand,
     required this.heartbeatAt,
     required this.socketPath,
-    required this.lastRainMm,
-    required this.lastRainSource,
-    required this.lastRainTime,
+    required this.rainfall24h,
     required this.pendingCommands,
     required this.maxPendingCommands,
     required this.zones,
@@ -2795,9 +2969,7 @@ class IrrigationSnapshot {
   final String runtimeCommand;
   final String heartbeatAt;
   final String socketPath;
-  final double lastRainMm;
-  final String lastRainSource;
-  final String lastRainTime;
+  final Rainfall24h rainfall24h;
   final int pendingCommands;
   final int maxPendingCommands;
   final List<IrrigationZone> zones;
@@ -2824,9 +2996,7 @@ class IrrigationSnapshot {
       runtimeCommand: 'N/A',
       heartbeatAt: 'N/A',
       socketPath: 'N/A',
-      lastRainMm: 0,
-      lastRainSource: 'N/A',
-      lastRainTime: 'N/A',
+      rainfall24h: Rainfall24h.empty,
       pendingCommands: 0,
       maxPendingCommands: 4,
       zones: [],
@@ -2848,6 +3018,7 @@ class IrrigationSnapshot {
     final zonesById = {for (final zone in zones) zone.id: zone};
 
     final rawRuntime = _asMap(json['runtime']);
+    final rawRainfall24h = _asMap(json['rain_24h']);
     final rawLastRain = _asMap(json['last_rain']);
     final rawGateway = _asMap(json['gateway']);
     final rawDb = _asMap(json['database']);
@@ -2873,9 +3044,7 @@ class IrrigationSnapshot {
       runtimeCommand: _asString(rawRuntime['command'], fallback: 'N/A'),
       heartbeatAt: _asString(rawRuntime['heartbeat_at'], fallback: 'N/A'),
       socketPath: _asString(rawGateway['socket_path'], fallback: 'N/A'),
-      lastRainMm: _asDouble(rawLastRain['amount_mm'], fallback: 0),
-      lastRainSource: _asString(rawLastRain['source'], fallback: 'N/A'),
-      lastRainTime: _asString(rawLastRain['event_time'], fallback: 'N/A'),
+      rainfall24h: Rainfall24h.fromJson(rawRainfall24h, rawLastRain),
       pendingCommands: _asInt(rawQueue['pending']),
       maxPendingCommands: _asInt(rawQueue['max'], fallback: 4),
       zones: zones,
@@ -2943,9 +3112,7 @@ class IrrigationSnapshot {
       runtimeCommand: 'START',
       heartbeatAt: '2026-07-08 15:42',
       socketPath: '/run/irigatie/control.sock',
-      lastRainMm: 2.8,
-      lastRainSource: 'openmeteo',
-      lastRainTime: 'azi 06:10',
+      rainfall24h: const Rainfall24h(openMeteoMm: 2.8, hardwareMm: 0.4),
       pendingCommands: 1,
       maxPendingCommands: 4,
       zones: zones,
