@@ -245,6 +245,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
                         onEditZone: _editZone,
                         isStopping: _isStopping,
                         onStop: _stopWatering,
+                        onShowWateringHistory: _showWateringHistory,
                         apiSettings: _apiSettings,
                         onSaveApiSettings: _saveApiSettings,
                         onResetApiSettings: _resetApiSettings,
@@ -277,6 +278,15 @@ class _IrrigationHomeState extends State<IrrigationHome> {
 
   void _selectDestination(int index) {
     setState(() => _selectedIndex = index);
+  }
+
+  Future<void> _showWateringHistory() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => _WateringHistorySheet(client: _client),
+    );
   }
 
   Future<void> _loadSnapshot({bool showLoading = true}) async {
@@ -589,6 +599,7 @@ class _ScreenBody extends StatelessWidget {
     required this.onEditZone,
     required this.isStopping,
     required this.onStop,
+    required this.onShowWateringHistory,
     required this.apiSettings,
     required this.onSaveApiSettings,
     required this.onResetApiSettings,
@@ -612,6 +623,7 @@ class _ScreenBody extends StatelessWidget {
   final ValueChanged<IrrigationZone> onEditZone;
   final bool isStopping;
   final VoidCallback onStop;
+  final VoidCallback onShowWateringHistory;
   final ApiSettings apiSettings;
   final ValueChanged<ApiSettings> onSaveApiSettings;
   final VoidCallback onResetApiSettings;
@@ -640,6 +652,7 @@ class _ScreenBody extends StatelessWidget {
         snapshot: snapshot,
         isStopping: isStopping,
         onStop: onStop,
+        onShowWateringHistory: onShowWateringHistory,
       ),
       1 => ScheduleScreen(
         snapshot: snapshot,
@@ -665,6 +678,7 @@ class _ScreenBody extends StatelessWidget {
         snapshot: snapshot,
         isStopping: isStopping,
         onStop: onStop,
+        onShowWateringHistory: onShowWateringHistory,
       ),
     };
   }
@@ -676,11 +690,13 @@ class DashboardScreen extends StatelessWidget {
     required this.snapshot,
     required this.isStopping,
     required this.onStop,
+    required this.onShowWateringHistory,
   });
 
   final IrrigationSnapshot snapshot;
   final bool isStopping;
   final VoidCallback onStop;
+  final VoidCallback onShowWateringHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -701,8 +717,9 @@ class DashboardScreen extends StatelessWidget {
               icon: Icons.water_drop_rounded,
               title: 'Program curent',
               value: snapshot.currentProgram ?? 'In asteptare',
-              detail: snapshot.remainingLabel,
+              detail: '${snapshot.remainingLabel} · istoric udari',
               tone: _Tone.blue,
+              onTap: onShowWateringHistory,
             ),
             _RainfallMetricTile(rainfall: snapshot.rainfall24h),
             _MetricTile(
@@ -767,6 +784,296 @@ class DashboardScreen extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _WateringHistorySheet extends StatefulWidget {
+  const _WateringHistorySheet({required this.client});
+
+  final IrrigationDataClient client;
+
+  @override
+  State<_WateringHistorySheet> createState() => _WateringHistorySheetState();
+}
+
+class _WateringHistorySheetState extends State<_WateringHistorySheet> {
+  final _items = <WateringHistoryItem>[];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
+  int? _nextBeforeId;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load(reset: true);
+  }
+
+  Future<void> _load({required bool reset}) async {
+    if (_isLoadingMore) return;
+    setState(() {
+      if (reset) {
+        _isLoading = true;
+        _error = null;
+      } else {
+        _isLoadingMore = true;
+      }
+    });
+
+    try {
+      final page = await widget.client.fetchWateringHistory(
+        beforeId: reset ? null : _nextBeforeId,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (reset) {
+          _items
+            ..clear()
+            ..addAll(page.items);
+        } else {
+          _items.addAll(page.items);
+        }
+        _nextBeforeId = page.nextBeforeId;
+        _hasMore = page.hasMore && page.nextBeforeId != null;
+        _isLoading = false;
+        _isLoadingMore = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return FractionallySizedBox(
+      heightFactor: 0.88,
+      child: Material(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Istoric udari',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _isLoading ? null : () => _load(reset: true),
+                    tooltip: 'Refresh',
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: 'Inchide',
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: colors.outlineVariant),
+            Expanded(child: _buildBody(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_isLoading && _items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final error = _error;
+    if (error != null && _items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Istoricul nu poate fi incarcat.',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(error, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _load(reset: true),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return const Center(child: Text('Nu exista evenimente de udare.'));
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+      itemCount: _items.length + (_hasMore ? 1 : 0),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        if (index == _items.length) {
+          return Center(
+            child: FilledButton.tonalIcon(
+              onPressed: _isLoadingMore ? null : () => _load(reset: false),
+              icon: _isLoadingMore
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                _isLoadingMore ? 'Se incarca...' : 'Incarca mai multe',
+              ),
+            ),
+          );
+        }
+
+        return _WateringHistoryRow(item: _items[index]);
+      },
+    );
+  }
+}
+
+class _WateringHistoryRow extends StatelessWidget {
+  const _WateringHistoryRow({required this.item});
+
+  final WateringHistoryItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final title = item.zoneLabel;
+    final subtitle = [
+      item.programLabel,
+      item.source,
+      item.startedAt,
+    ].where((value) => value.isNotEmpty).join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _HistoryResultChip(item.result),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InfoChip(
+                Icons.timer_rounded,
+                'real ${_formatSeconds(item.actualSeconds)}',
+              ),
+              _InfoChip(
+                Icons.schedule_rounded,
+                'plan ${_formatSeconds(item.plannedSeconds)}',
+              ),
+              _InfoChip(
+                Icons.water_drop_rounded,
+                'ploaie ${_formatMillimeters(item.rainCreditMm)}',
+              ),
+            ],
+          ),
+          if (item.error != null && item.error!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              item.error!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.error),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryResultChip extends StatelessWidget {
+  const _HistoryResultChip(this.result);
+
+  final String result;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (result) {
+      'completed' || 'test_completed' => const Color(0xFF0E7C66),
+      'interrupted' || 'test_interrupted' => const Color(0xFFD08B2F),
+      'skipped_rain' ||
+      'skipped_inactive' ||
+      'skipped_disabled' => const Color(0xFF747A83),
+      _ => Theme.of(context).colorScheme.error,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        result,
+        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+      ),
     );
   }
 }
@@ -1693,6 +2000,7 @@ class _MetricTile extends StatelessWidget {
     required this.value,
     required this.detail,
     required this.tone,
+    this.onTap,
   });
 
   final IconData icon;
@@ -1700,24 +2008,28 @@ class _MetricTile extends StatelessWidget {
   final String value;
   final String detail;
   final _Tone tone;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final color = tone.color(context);
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: 148),
+    final borderRadius = BorderRadius.circular(8);
+    final child = Padding(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, color: color, size: 28),
+          Row(
+            children: [
+              Icon(icon, color: color, size: 28),
+              if (onTap != null) ...[
+                const Spacer(),
+                Icon(Icons.history_rounded, color: color, size: 22),
+              ],
+            ],
+          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1749,6 +2061,29 @@ class _MetricTile extends StatelessWidget {
         ],
       ),
     );
+
+    final tile = Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: borderRadius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: borderRadius,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 148),
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+
+    if (onTap == null) return tile;
+
+    return Tooltip(message: 'Istoric udari', child: tile);
   }
 }
 
@@ -2675,6 +3010,94 @@ class Rainfall24h {
   }
 }
 
+class WateringHistoryPage {
+  const WateringHistoryPage({
+    required this.items,
+    required this.nextBeforeId,
+    required this.hasMore,
+  });
+
+  final List<WateringHistoryItem> items;
+  final int? nextBeforeId;
+  final bool hasMore;
+
+  factory WateringHistoryPage.fromJson(Map<String, dynamic> json) {
+    return WateringHistoryPage(
+      items: [
+        for (final item in _asList(json['items']))
+          if (item is Map)
+            WateringHistoryItem.fromJson(Map<String, dynamic>.from(item)),
+      ],
+      nextBeforeId: _nullableInt(json['next_before_id']),
+      hasMore: _asBool(json['has_more']),
+    );
+  }
+}
+
+class WateringHistoryItem {
+  const WateringHistoryItem({
+    required this.id,
+    required this.startedAt,
+    required this.endedAt,
+    required this.source,
+    required this.programId,
+    required this.programName,
+    required this.zoneId,
+    required this.zoneName,
+    required this.plannedSeconds,
+    required this.actualSeconds,
+    required this.rainCreditMm,
+    required this.result,
+    required this.error,
+  });
+
+  final int id;
+  final String startedAt;
+  final String endedAt;
+  final String source;
+  final int? programId;
+  final String? programName;
+  final int? zoneId;
+  final String? zoneName;
+  final double? plannedSeconds;
+  final double? actualSeconds;
+  final double? rainCreditMm;
+  final String result;
+  final String? error;
+
+  String get programLabel {
+    final label = programName;
+    if (label != null && label.isNotEmpty) return label;
+    final id = programId;
+    return id == null ? '' : 'Program #$id';
+  }
+
+  String get zoneLabel {
+    final label = zoneName;
+    if (label != null && label.isNotEmpty) return label;
+    final id = zoneId;
+    return id == null ? 'Traseu necunoscut' : 'Traseu #$id';
+  }
+
+  factory WateringHistoryItem.fromJson(Map<String, dynamic> json) {
+    return WateringHistoryItem(
+      id: _asInt(json['id']),
+      startedAt: _asString(json['started_at'], fallback: 'N/A'),
+      endedAt: _asString(json['ended_at'], fallback: 'N/A'),
+      source: _asString(json['source'], fallback: 'N/A'),
+      programId: _nullableInt(json['program_id']),
+      programName: _nullableString(json['program_name']),
+      zoneId: _nullableInt(json['zone_id']),
+      zoneName: _nullableString(json['zone_name']),
+      plannedSeconds: _nullableDouble(json['planned_seconds']),
+      actualSeconds: _nullableDouble(json['actual_seconds']),
+      rainCreditMm: _nullableDouble(json['rain_credit_mm']),
+      result: _asString(json['result'], fallback: 'unknown'),
+      error: _nullableString(json['error']),
+    );
+  }
+}
+
 class WriteResult {
   const WriteResult({required this.id, required this.message});
 
@@ -2783,6 +3206,22 @@ class IrrigationDataClient {
     final decoded = _decodeApiObject(response, allowApplicationError: true);
 
     return IrrigationSnapshot.fromJson(decoded);
+  }
+
+  Future<WateringHistoryPage> fetchWateringHistory({
+    int limit = 50,
+    int? beforeId,
+  }) async {
+    final uri = Uri.parse('$apiBaseUrl/api/watering-history').replace(
+      queryParameters: {
+        'limit': limit.toString(),
+        if (beforeId != null) 'before_id': beforeId.toString(),
+      },
+    );
+    final response = await _httpClient.get(uri, headers: _headers());
+    final decoded = _decodeApiObject(response);
+
+    return WateringHistoryPage.fromJson(decoded);
   }
 
   Future<CommandResult> executeManualProgram(int programId) async {
@@ -3235,6 +3674,12 @@ String _asString(Object? value, {String fallback = ''}) {
   return text.isEmpty ? fallback : text;
 }
 
+String? _nullableString(Object? value) {
+  if (value == null) return null;
+  final text = value.toString();
+  return text.isEmpty ? null : text;
+}
+
 int _asInt(Object? value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
@@ -3254,6 +3699,12 @@ double _asDouble(Object? value, {double fallback = 0}) {
   return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
+double? _nullableDouble(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
+}
+
 bool _asBool(Object? value, {bool fallback = false}) {
   if (value is bool) return value;
   if (value is num) return value != 0;
@@ -3261,6 +3712,21 @@ bool _asBool(Object? value, {bool fallback = false}) {
   if (text == 'true' || text == '1' || text == 'yes') return true;
   if (text == 'false' || text == '0' || text == 'no') return false;
   return fallback;
+}
+
+String _formatSeconds(double? value) {
+  if (value == null) return 'N/A';
+  if (value < 60) return '${value.round()} sec';
+  final minutes = value / 60;
+  if (minutes == minutes.roundToDouble()) {
+    return '${minutes.round()} min';
+  }
+  return '${minutes.toStringAsFixed(1)} min';
+}
+
+String _formatMillimeters(double? value) {
+  if (value == null) return 'N/A';
+  return '${value.toStringAsFixed(1)} mm';
 }
 
 String? _requiredText(String? value) {
