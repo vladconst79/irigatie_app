@@ -7,7 +7,7 @@ variables:
   FLUTTER_VERSION: "3.44.6"
 
 .flutter_linux:
-  image: ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION}
+  image: ghcr.io/cirruslabs/flutter:stable
   cache:
     key:
       files:
@@ -16,6 +16,10 @@ variables:
       - .pub-cache/
       - .dart_tool/
   before_script:
+    - export FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
+    - git config --global --add safe.directory "$FLUTTER_ROOT"
+    - git -C "$FLUTTER_ROOT" fetch --depth 1 origin "$FLUTTER_VERSION"
+    - git -C "$FLUTTER_ROOT" checkout FETCH_HEAD
     - flutter --version
     - flutter pub get
 
