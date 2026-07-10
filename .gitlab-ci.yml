@@ -3,30 +3,35 @@ stages:
   - build
 
 variables:
+  ARTIFACT_COMPRESSION_LEVEL: "fastest"
+  CACHE_COMPRESSION_LEVEL: "fastest"
+  FF_USE_FASTZIP: "true"
+  GIT_DEPTH: "20"
   PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
-  FLUTTER_VERSION: "3.44.6"
   MACOS_FLUTTER_BIN: "/Users/vlad/develop/flutter/bin"
 
 .flutter_linux:
   image: ghcr.io/cirruslabs/flutter:stable
+  interruptible: true
   cache:
     key:
       files:
         - pubspec.lock
     paths:
       - .pub-cache/
-      - .dart_tool/
   before_script:
-    - export FLUTTER_ROOT="$(dirname "$(dirname "$(command -v flutter)")")"
-    - git config --global --add safe.directory "$FLUTTER_ROOT"
-    - git -C "$FLUTTER_ROOT" fetch --depth 1 origin "$FLUTTER_VERSION"
-    - git -C "$FLUTTER_ROOT" checkout FETCH_HEAD
+    - flutter config --no-analytics
+    - dart --disable-analytics
     - flutter --version
     - flutter pub get
+  after_script:
+    - pkill -TERM -f flutter || true
+    - pkill -TERM -f dart || true
 
 analyze_test:
   extends: .flutter_linux
   stage: validate
+  timeout: 1 hour
   script:
     - dart format --set-exit-if-changed .
     - flutter analyze
@@ -35,6 +40,7 @@ analyze_test:
 build_web:
   extends: .flutter_linux
   stage: build
+  timeout: 1 hour
   needs:
     - analyze_test
   script:
@@ -48,6 +54,7 @@ build_web:
 build_android_apk:
   extends: .flutter_linux
   stage: build
+  timeout: 3 hours
   needs:
     - analyze_test
   script:
@@ -62,6 +69,7 @@ build_android_apk:
 # For a distributable IPA, configure Apple signing on that runner first.
 build_ios_unsigned:
   stage: build
+  timeout: 2 hours
   tags:
     - macos
   needs:
