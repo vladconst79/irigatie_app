@@ -1,0 +1,81 @@
+stages:
+  - validate
+  - build
+
+variables:
+  PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
+  FLUTTER_VERSION_CHANNEL: "stable"
+
+.flutter_linux:
+  image: ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION_CHANNEL}
+  cache:
+    key:
+      files:
+        - pubspec.lock
+    paths:
+      - .pub-cache/
+      - .dart_tool/
+  before_script:
+    - flutter --version
+    - flutter pub get
+
+analyze_test:
+  extends: .flutter_linux
+  stage: validate
+  script:
+    - dart format --set-exit-if-changed .
+    - flutter analyze
+    - flutter test
+
+build_web:
+  extends: .flutter_linux
+  stage: build
+  needs:
+    - analyze_test
+  script:
+    - flutter build web --release
+  artifacts:
+    name: "irigatie-web-${CI_COMMIT_SHORT_SHA}"
+    expire_in: 14 days
+    paths:
+      - build/web/
+
+build_android_apk:
+  extends: .flutter_linux
+  stage: build
+  needs:
+    - analyze_test
+  script:
+    - flutter build apk --release
+  artifacts:
+    name: "irigatie-android-${CI_COMMIT_SHORT_SHA}"
+    expire_in: 30 days
+    paths:
+      - build/app/outputs/flutter-apk/app-release.apk
+
+# Requires a GitLab macOS runner with Xcode, CocoaPods, and Flutter installed.
+# For a distributable IPA, configure Apple signing on that runner first.
+build_ios_unsigned:
+  stage: build
+  tags:
+    - macos
+  needs:
+    - analyze_test
+  when: manual
+  cache:
+    key:
+      files:
+        - pubspec.lock
+    paths:
+      - .pub-cache/
+      - .dart_tool/
+  before_script:
+    - flutter --version
+    - flutter pub get
+  script:
+    - flutter build ios --release --no-codesign
+  artifacts:
+    name: "irigatie-ios-unsigned-${CI_COMMIT_SHORT_SHA}"
+    expire_in: 14 days
+    paths:
+      - build/ios/iphoneos/Runner.app
