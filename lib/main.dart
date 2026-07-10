@@ -3201,7 +3201,7 @@ class IrrigationDataClient {
   }
 
   Future<IrrigationSnapshot> fetchSnapshot() async {
-    final uri = Uri.parse('$apiBaseUrl/api/snapshot');
+    final uri = _apiUri('/api/snapshot');
     final response = await _httpClient.get(uri, headers: _headers());
     final decoded = _decodeApiObject(response, allowApplicationError: true);
 
@@ -3212,7 +3212,8 @@ class IrrigationDataClient {
     int limit = 50,
     int? beforeId,
   }) async {
-    final uri = Uri.parse('$apiBaseUrl/api/watering-history').replace(
+    final uri = _apiUri(
+      '/api/watering-history',
       queryParameters: {
         'limit': limit.toString(),
         if (beforeId != null) 'before_id': beforeId.toString(),
@@ -3225,7 +3226,7 @@ class IrrigationDataClient {
   }
 
   Future<CommandResult> executeManualProgram(int programId) async {
-    final uri = Uri.parse('$apiBaseUrl/api/manual/execute');
+    final uri = _apiUri('/api/manual/execute');
     final response = await _httpClient.post(
       uri,
       headers: _headers(contentTypeJson: true),
@@ -3237,7 +3238,7 @@ class IrrigationDataClient {
   }
 
   Future<CommandResult> executeZoneTest(int zoneId) async {
-    final uri = Uri.parse('$apiBaseUrl/api/zones/test');
+    final uri = _apiUri('/api/zones/test');
     final response = await _httpClient.post(
       uri,
       headers: _headers(contentTypeJson: true),
@@ -3249,7 +3250,7 @@ class IrrigationDataClient {
   }
 
   Future<CommandResult> stopWatering() async {
-    final uri = Uri.parse('$apiBaseUrl/api/stop');
+    final uri = _apiUri('/api/stop');
     final response = await _httpClient.post(
       uri,
       headers: _headers(contentTypeJson: true),
@@ -3261,7 +3262,7 @@ class IrrigationDataClient {
   }
 
   Future<CommandResult> executeSchedule(int scheduleId) async {
-    final uri = Uri.parse('$apiBaseUrl/api/schedules/$scheduleId/execute');
+    final uri = _apiUri('/api/schedules/$scheduleId/execute');
     final response = await _httpClient.post(uri, headers: _headers());
     final decoded = _decodeApiObject(response);
 
@@ -3295,7 +3296,7 @@ class IrrigationDataClient {
   }
 
   Future<WriteResult> _postWrite(String path, Map<String, Object?> body) async {
-    final uri = Uri.parse('$apiBaseUrl$path');
+    final uri = _apiUri(path);
     final response = await _httpClient.post(
       uri,
       headers: _headers(contentTypeJson: true),
@@ -3310,7 +3311,7 @@ class IrrigationDataClient {
     String path,
     Map<String, Object?> body,
   ) async {
-    final uri = Uri.parse('$apiBaseUrl$path');
+    final uri = _apiUri(path);
     final response = await _httpClient.patch(
       uri,
       headers: _headers(contentTypeJson: true),
@@ -3322,11 +3323,29 @@ class IrrigationDataClient {
   }
 
   Future<WriteResult> _deleteWrite(String path) async {
-    final uri = Uri.parse('$apiBaseUrl$path');
+    final uri = _apiUri(path);
     final response = await _httpClient.delete(uri, headers: _headers());
     final decoded = _decodeApiObject(response);
 
     return WriteResult.fromJson(decoded);
+  }
+
+  Uri _apiUri(String path, {Map<String, String>? queryParameters}) {
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    if (apiBaseUrl.isEmpty) {
+      return Uri.parse(
+        normalizedPath,
+      ).replace(queryParameters: queryParameters);
+    }
+
+    final base = Uri.parse(apiBaseUrl);
+    final basePath = _trimTrailingSlash(base.path);
+    final endpointPath =
+        basePath.endsWith('/api') && normalizedPath.startsWith('/api/')
+        ? '$basePath${normalizedPath.substring('/api'.length)}'
+        : '$basePath$normalizedPath';
+
+    return base.replace(path: endpointPath, queryParameters: queryParameters);
   }
 
   Map<String, dynamic> _decodeApiObject(

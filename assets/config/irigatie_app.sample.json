@@ -1,4 +1,4 @@
 {
-  "apiUrl": "http://raspberry-pi-host-or-ip:8080",
+  "apiUrl": "https://irigatie.shaitan.ro/api/",
   "apiToken": "replace-with-irigatie-http-gateway-token"
 }
