@@ -4,10 +4,10 @@ stages:
 
 variables:
   PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
-  FLUTTER_VERSION_CHANNEL: "stable"
+  FLUTTER_VERSION: "3.44.6"
 
 .flutter_linux:
-  image: ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION_CHANNEL}
+  image: ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION}
   cache:
     key:
       files:
