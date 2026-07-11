@@ -381,6 +381,13 @@ class _IrrigationHomeState extends State<IrrigationHome> {
 
   Future<void> _executeManualProgram(ManualProgram program) async {
     if (_executingManualProgramId != null) return;
+    final confirmed = await _confirmPhysicalAction(
+      title: 'Executi programul manual?',
+      message:
+          'Programul "${program.name}" va porni udarea pentru ${_formatManualProgramDuration(program)}.',
+      confirmLabel: 'Executa',
+    );
+    if (!confirmed) return;
 
     setState(() => _executingManualProgramId = program.id);
     try {
@@ -407,6 +414,13 @@ class _IrrigationHomeState extends State<IrrigationHome> {
 
   Future<void> _executeSchedule(ScheduleProgram schedule) async {
     if (_executingScheduleId != null) return;
+    final confirmed = await _confirmPhysicalAction(
+      title: 'Executi programarea acum?',
+      message:
+          '${schedule.zone.name} va porni pentru ${schedule.durationMinutes} min.',
+      confirmLabel: 'Executa',
+    );
+    if (!confirmed) return;
 
     setState(() => _executingScheduleId = schedule.id);
     try {
@@ -491,6 +505,13 @@ class _IrrigationHomeState extends State<IrrigationHome> {
 
   Future<void> _testZone(IrrigationZone zone) async {
     if (_testingZoneId != null) return;
+    final confirmed = await _confirmPhysicalAction(
+      title: 'Testezi traseul?',
+      message:
+          '${zone.name} va porni temporar pentru durata de test configurata.',
+      confirmLabel: 'Testeaza',
+    );
+    if (!confirmed) return;
 
     setState(() => _testingZoneId = zone.id);
     try {
@@ -610,6 +631,32 @@ class _IrrigationHomeState extends State<IrrigationHome> {
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Sterge'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<bool> _confirmPhysicalAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Anuleaza'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: Text(confirmLabel),
           ),
         ],
       ),
@@ -3943,6 +3990,20 @@ String _formatRelayValue(double? value) {
   if (value == null) return 'N/A';
   if (value == value.roundToDouble()) return value.round().toString();
   return value.toStringAsFixed(2);
+}
+
+String _formatManualProgramDuration(ManualProgram program) {
+  final totalMinutes = program.zoneDurations.values.fold<int>(
+    0,
+    (sum, minutes) => sum + minutes,
+  );
+  final activeZones = program.zoneDurations.values
+      .where((minutes) => minutes > 0)
+      .length;
+
+  if (activeZones == 0) return '0 min';
+  final zoneLabel = activeZones == 1 ? '1 traseu' : '$activeZones trasee';
+  return '$totalMinutes min pe $zoneLabel';
 }
 
 String _formatSeconds(double? value) {
