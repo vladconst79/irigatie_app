@@ -50,7 +50,8 @@ class IrrigationHome extends StatefulWidget {
   State<IrrigationHome> createState() => _IrrigationHomeState();
 }
 
-class _IrrigationHomeState extends State<IrrigationHome> {
+class _IrrigationHomeState extends State<IrrigationHome>
+    with WidgetsBindingObserver {
   static const _pollInterval = Duration(seconds: 3);
 
   int _selectedIndex = 0;
@@ -69,6 +70,7 @@ class _IrrigationHomeState extends State<IrrigationHome> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _apiSettings = widget.apiSettings;
     _client = IrrigationDataClient(apiSettings: _apiSettings);
     final initialSnapshot = widget.initialSnapshot;
@@ -78,18 +80,28 @@ class _IrrigationHomeState extends State<IrrigationHome> {
     } else {
       _loadSnapshot();
     }
-    _pollTimer = Timer.periodic(_pollInterval, (_) {
-      if (_selectedIndex == 0) {
-        _loadSnapshot(showLoading: false);
-      }
-    });
+    _startPolling();
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stopPolling();
     _client.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPolling();
+      if (_selectedIndex == 0) {
+        _loadSnapshot(showLoading: false);
+      }
+      return;
+    }
+
+    _stopPolling();
   }
 
   @override
@@ -178,6 +190,20 @@ class _IrrigationHomeState extends State<IrrigationHome> {
 
   void _selectDestination(int index) {
     setState(() => _selectedIndex = index);
+  }
+
+  void _startPolling() {
+    if (_pollTimer != null) return;
+    _pollTimer = Timer.periodic(_pollInterval, (_) {
+      if (_selectedIndex == 0) {
+        _loadSnapshot(showLoading: false);
+      }
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   Future<void> _showWateringHistory() async {
