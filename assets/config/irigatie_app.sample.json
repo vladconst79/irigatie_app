@@ -1,4 +1,6 @@
 {
   "apiUrl": "https://irigatie.shaitan.ro/api/",
-  "apiToken": "replace-with-irigatie-http-gateway-token"
+  "apiToken": "replace-with-irigatie-http-gateway-token",
+  "readTimeoutSeconds": 30,
+  "writeTimeoutSeconds": 60
 }

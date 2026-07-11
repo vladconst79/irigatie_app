@@ -46,7 +46,9 @@ Example:
 ```json
 {
   "apiUrl": "https://irigatie.example.com/api/",
-  "apiToken": "replace-with-irigatie-http-gateway-token"
+  "apiToken": "replace-with-irigatie-http-gateway-token",
+  "readTimeoutSeconds": 30,
+  "writeTimeoutSeconds": 60
 }
 ```
 
@@ -62,8 +64,13 @@ You can also configure the app at build/run time:
 ```sh
 flutter run \
   --dart-define=IRIGATIE_API_URL=https://irigatie.example.com/api \
-  --dart-define=IRIGATIE_API_TOKEN=replace-with-token
+  --dart-define=IRIGATIE_API_TOKEN=replace-with-token \
+  --dart-define=IRIGATIE_READ_TIMEOUT_SECONDS=30 \
+  --dart-define=IRIGATIE_WRITE_TIMEOUT_SECONDS=60
 ```
+
+Timeouts are configured in seconds. The defaults are `30` seconds for read
+requests and `60` seconds for write/command requests.
 
 ## Gateway Endpoints Used
 

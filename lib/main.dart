@@ -13,17 +13,37 @@ Future<void> main() async {
 }
 
 class ApiSettings {
-  const ApiSettings({required this.apiUrl, required this.apiToken});
+  const ApiSettings({
+    required this.apiUrl,
+    required this.apiToken,
+    this.readTimeoutSeconds = defaultReadTimeoutSeconds,
+    this.writeTimeoutSeconds = defaultWriteTimeoutSeconds,
+  });
 
   static const _apiUrlKey = 'irigatie.apiUrl';
   static const _apiTokenKey = 'irigatie.apiToken';
+  static const _readTimeoutSecondsKey = 'irigatie.readTimeoutSeconds';
+  static const _writeTimeoutSecondsKey = 'irigatie.writeTimeoutSeconds';
+
+  static const defaultReadTimeoutSeconds = 30;
+  static const defaultWriteTimeoutSeconds = 60;
 
   final String apiUrl;
   final String apiToken;
+  final int readTimeoutSeconds;
+  final int writeTimeoutSeconds;
 
   static const fromEnvironment = ApiSettings(
     apiUrl: String.fromEnvironment('IRIGATIE_API_URL'),
     apiToken: String.fromEnvironment('IRIGATIE_API_TOKEN'),
+    readTimeoutSeconds: int.fromEnvironment(
+      'IRIGATIE_READ_TIMEOUT_SECONDS',
+      defaultValue: defaultReadTimeoutSeconds,
+    ),
+    writeTimeoutSeconds: int.fromEnvironment(
+      'IRIGATIE_WRITE_TIMEOUT_SECONDS',
+      defaultValue: defaultWriteTimeoutSeconds,
+    ),
   );
 
   static Future<ApiSettings> load() async {
@@ -32,12 +52,16 @@ class ApiSettings {
       assetSettings = await _loadAsset();
     } catch (e) {
       // Fall back to an empty string so the URL resolves perfectly to '/api/snapshot'
-      assetSettings = ApiSettings(apiUrl: '', apiToken: '');
+      assetSettings = const ApiSettings(apiUrl: '', apiToken: '');
     }
 
     final preferences = await SharedPreferences.getInstance();
     final savedApiUrl = preferences.getString(_apiUrlKey);
     final savedApiToken = preferences.getString(_apiTokenKey);
+    final savedReadTimeoutSeconds = preferences.getInt(_readTimeoutSecondsKey);
+    final savedWriteTimeoutSeconds = preferences.getInt(
+      _writeTimeoutSecondsKey,
+    );
 
     // 1. Prioritize local storage if populated
     // 2. If empty, fall back to asset JSON
@@ -57,6 +81,14 @@ class ApiSettings {
     return ApiSettings(
       apiUrl: _trimTrailingSlash(finalUrl.trim()),
       apiToken: finalToken,
+      readTimeoutSeconds: _validTimeoutSeconds(
+        savedReadTimeoutSeconds ?? assetSettings.readTimeoutSeconds,
+        fallback: defaultReadTimeoutSeconds,
+      ),
+      writeTimeoutSeconds: _validTimeoutSeconds(
+        savedWriteTimeoutSeconds ?? assetSettings.writeTimeoutSeconds,
+        fallback: defaultWriteTimeoutSeconds,
+      ),
     );
   }
 
@@ -81,6 +113,14 @@ class ApiSettings {
           decoded['apiToken'] ?? decoded['api_token'],
           fallback: fromEnvironment.apiToken,
         ),
+        readTimeoutSeconds: _validTimeoutSeconds(
+          decoded['readTimeoutSeconds'] ?? decoded['read_timeout_seconds'],
+          fallback: fromEnvironment.readTimeoutSeconds,
+        ),
+        writeTimeoutSeconds: _validTimeoutSeconds(
+          decoded['writeTimeoutSeconds'] ?? decoded['write_timeout_seconds'],
+          fallback: fromEnvironment.writeTimeoutSeconds,
+        ),
       );
     } catch (_) {
       return fromEnvironment;
@@ -91,13 +131,33 @@ class ApiSettings {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(_apiUrlKey, _trimTrailingSlash(apiUrl));
     await preferences.setString(_apiTokenKey, apiToken);
+    await preferences.setInt(
+      _readTimeoutSecondsKey,
+      _validTimeoutSeconds(
+        readTimeoutSeconds,
+        fallback: defaultReadTimeoutSeconds,
+      ),
+    );
+    await preferences.setInt(
+      _writeTimeoutSecondsKey,
+      _validTimeoutSeconds(
+        writeTimeoutSeconds,
+        fallback: defaultWriteTimeoutSeconds,
+      ),
+    );
   }
 
   Future<void> clearSaved() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_apiUrlKey);
     await preferences.remove(_apiTokenKey);
+    await preferences.remove(_readTimeoutSecondsKey);
+    await preferences.remove(_writeTimeoutSecondsKey);
   }
+
+  Duration get readTimeout => Duration(seconds: readTimeoutSeconds);
+
+  Duration get writeTimeout => Duration(seconds: writeTimeoutSeconds);
 }
 
 class IrrigationApp extends StatelessWidget {
@@ -498,6 +558,8 @@ class _IrrigationHomeState extends State<IrrigationHome> {
     final updated = ApiSettings(
       apiUrl: _trimTrailingSlash(settings.apiUrl),
       apiToken: settings.apiToken,
+      readTimeoutSeconds: settings.readTimeoutSeconds,
+      writeTimeoutSeconds: settings.writeTimeoutSeconds,
     );
     await updated.save();
     _client.close();
@@ -1259,8 +1321,11 @@ class ConfigurationScreen extends StatefulWidget {
 }
 
 class _ConfigurationScreenState extends State<ConfigurationScreen> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _apiUrlController;
   late final TextEditingController _apiTokenController;
+  late final TextEditingController _readTimeoutController;
+  late final TextEditingController _writeTimeoutController;
   bool _showToken = false;
 
   @override
@@ -1268,6 +1333,12 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
     super.initState();
     _apiUrlController = TextEditingController(text: widget.settings.apiUrl);
     _apiTokenController = TextEditingController(text: widget.settings.apiToken);
+    _readTimeoutController = TextEditingController(
+      text: widget.settings.readTimeoutSeconds.toString(),
+    );
+    _writeTimeoutController = TextEditingController(
+      text: widget.settings.writeTimeoutSeconds.toString(),
+    );
   }
 
   @override
@@ -1279,12 +1350,24 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
     if (oldWidget.settings.apiToken != widget.settings.apiToken) {
       _apiTokenController.text = widget.settings.apiToken;
     }
+    if (oldWidget.settings.readTimeoutSeconds !=
+        widget.settings.readTimeoutSeconds) {
+      _readTimeoutController.text = widget.settings.readTimeoutSeconds
+          .toString();
+    }
+    if (oldWidget.settings.writeTimeoutSeconds !=
+        widget.settings.writeTimeoutSeconds) {
+      _writeTimeoutController.text = widget.settings.writeTimeoutSeconds
+          .toString();
+    }
   }
 
   @override
   void dispose() {
     _apiUrlController.dispose();
     _apiTokenController.dispose();
+    _readTimeoutController.dispose();
+    _writeTimeoutController.dispose();
     super.dispose();
   }
 
@@ -1310,49 +1393,81 @@ class _ConfigurationScreenState extends State<ConfigurationScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _apiUrlController,
-              decoration: const InputDecoration(
-                labelText: 'API URL',
-                prefixIcon: Icon(Icons.link_rounded),
-                border: OutlineInputBorder(),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _apiUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'API URL',
+                  prefixIcon: Icon(Icons.link_rounded),
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.next,
               ),
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _apiTokenController,
-              obscureText: !_showToken,
-              decoration: InputDecoration(
-                labelText: 'API token',
-                prefixIcon: const Icon(Icons.key_rounded),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  onPressed: () => setState(() => _showToken = !_showToken),
-                  tooltip: _showToken ? 'Ascunde token' : 'Arata token',
-                  icon: Icon(
-                    _showToken
-                        ? Icons.visibility_off_rounded
-                        : Icons.visibility_rounded,
+              const SizedBox(height: 14),
+              TextField(
+                controller: _apiTokenController,
+                obscureText: !_showToken,
+                decoration: InputDecoration(
+                  labelText: 'API token',
+                  prefixIcon: const Icon(Icons.key_rounded),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    onPressed: () => setState(() => _showToken = !_showToken),
+                    tooltip: _showToken ? 'Ascunde token' : 'Arata token',
+                    icon: Icon(
+                      _showToken
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 14),
+              _TwoColumnFields(
+                children: [
+                  TextFormField(
+                    controller: _readTimeoutController,
+                    decoration: const InputDecoration(
+                      labelText: 'Timeout citire secunde',
+                      prefixIcon: Icon(Icons.timer_rounded),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
+                    validator: _positiveInt,
+                  ),
+                  TextFormField(
+                    controller: _writeTimeoutController,
+                    decoration: const InputDecoration(
+                      labelText: 'Timeout scriere secunde',
+                      prefixIcon: Icon(Icons.timer_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: _positiveInt,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   void _save() {
+    if (!_formKey.currentState!.validate()) return;
     widget.onSave(
       ApiSettings(
         apiUrl: _apiUrlController.text,
         apiToken: _apiTokenController.text,
+        readTimeoutSeconds: int.parse(_readTimeoutController.text.trim()),
+        writeTimeoutSeconds: int.parse(_writeTimeoutController.text.trim()),
       ),
     );
   }
@@ -3213,11 +3328,15 @@ class IrrigationDataClient {
     ApiSettings apiSettings = ApiSettings.fromEnvironment,
   }) : _httpClient = httpClient ?? http.Client(),
        apiBaseUrl = _trimTrailingSlash(apiSettings.apiUrl),
-       apiToken = apiSettings.apiToken;
+       apiToken = apiSettings.apiToken,
+       readTimeout = apiSettings.readTimeout,
+       writeTimeout = apiSettings.writeTimeout;
 
   final http.Client _httpClient;
   final String apiBaseUrl;
   final String apiToken;
+  final Duration readTimeout;
+  final Duration writeTimeout;
 
   void close() {
     _httpClient.close();
@@ -3225,7 +3344,9 @@ class IrrigationDataClient {
 
   Future<IrrigationSnapshot> fetchSnapshot() async {
     final uri = _apiUri('/api/snapshot');
-    final response = await _httpClient.get(uri, headers: _headers());
+    final response = await _httpClient
+        .get(uri, headers: _headers())
+        .timeout(readTimeout);
     final decoded = _decodeApiObject(response, allowApplicationError: true);
     final status = await _fetchStatusOrNull();
 
@@ -3235,7 +3356,9 @@ class IrrigationDataClient {
   Future<Map<String, dynamic>?> _fetchStatusOrNull() async {
     try {
       final uri = _apiUri('/api/status');
-      final response = await _httpClient.get(uri, headers: _headers());
+      final response = await _httpClient
+          .get(uri, headers: _headers())
+          .timeout(readTimeout);
       return _decodeApiObject(response);
     } catch (_) {
       return null;
@@ -3253,7 +3376,9 @@ class IrrigationDataClient {
         if (beforeId != null) 'before_id': beforeId.toString(),
       },
     );
-    final response = await _httpClient.get(uri, headers: _headers());
+    final response = await _httpClient
+        .get(uri, headers: _headers())
+        .timeout(readTimeout);
     final decoded = _decodeApiObject(response);
 
     return WateringHistoryPage.fromJson(decoded);
@@ -3261,11 +3386,13 @@ class IrrigationDataClient {
 
   Future<CommandResult> executeManualProgram(int programId) async {
     final uri = _apiUri('/api/manual/execute');
-    final response = await _httpClient.post(
-      uri,
-      headers: _headers(contentTypeJson: true),
-      body: jsonEncode({'program_id': programId}),
-    );
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: _headers(contentTypeJson: true),
+          body: jsonEncode({'program_id': programId}),
+        )
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return CommandResult.fromJson(decoded);
@@ -3273,11 +3400,13 @@ class IrrigationDataClient {
 
   Future<CommandResult> executeZoneTest(int zoneId) async {
     final uri = _apiUri('/api/zones/test');
-    final response = await _httpClient.post(
-      uri,
-      headers: _headers(contentTypeJson: true),
-      body: jsonEncode({'zone_id': zoneId}),
-    );
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: _headers(contentTypeJson: true),
+          body: jsonEncode({'zone_id': zoneId}),
+        )
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return CommandResult.fromJson(decoded);
@@ -3285,11 +3414,13 @@ class IrrigationDataClient {
 
   Future<CommandResult> stopWatering() async {
     final uri = _apiUri('/api/stop');
-    final response = await _httpClient.post(
-      uri,
-      headers: _headers(contentTypeJson: true),
-      body: jsonEncode(<String, Object?>{}),
-    );
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: _headers(contentTypeJson: true),
+          body: jsonEncode(<String, Object?>{}),
+        )
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return CommandResult.fromJson(decoded);
@@ -3297,7 +3428,9 @@ class IrrigationDataClient {
 
   Future<CommandResult> executeSchedule(int scheduleId) async {
     final uri = _apiUri('/api/schedules/$scheduleId/execute');
-    final response = await _httpClient.post(uri, headers: _headers());
+    final response = await _httpClient
+        .post(uri, headers: _headers())
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return CommandResult.fromJson(decoded);
@@ -3331,11 +3464,13 @@ class IrrigationDataClient {
 
   Future<WriteResult> _postWrite(String path, Map<String, Object?> body) async {
     final uri = _apiUri(path);
-    final response = await _httpClient.post(
-      uri,
-      headers: _headers(contentTypeJson: true),
-      body: jsonEncode(body),
-    );
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: _headers(contentTypeJson: true),
+          body: jsonEncode(body),
+        )
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return WriteResult.fromJson(decoded);
@@ -3346,11 +3481,13 @@ class IrrigationDataClient {
     Map<String, Object?> body,
   ) async {
     final uri = _apiUri(path);
-    final response = await _httpClient.patch(
-      uri,
-      headers: _headers(contentTypeJson: true),
-      body: jsonEncode(body),
-    );
+    final response = await _httpClient
+        .patch(
+          uri,
+          headers: _headers(contentTypeJson: true),
+          body: jsonEncode(body),
+        )
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return WriteResult.fromJson(decoded);
@@ -3358,7 +3495,9 @@ class IrrigationDataClient {
 
   Future<WriteResult> _deleteWrite(String path) async {
     final uri = _apiUri(path);
-    final response = await _httpClient.delete(uri, headers: _headers());
+    final response = await _httpClient
+        .delete(uri, headers: _headers())
+        .timeout(writeTimeout);
     final decoded = _decodeApiObject(response);
 
     return WriteResult.fromJson(decoded);
@@ -3762,6 +3901,11 @@ int? _nullableInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse(value.toString());
+}
+
+int _validTimeoutSeconds(Object? value, {required int fallback}) {
+  final seconds = _asInt(value, fallback: fallback);
+  return seconds > 0 ? seconds : fallback;
 }
 
 double _asDouble(Object? value, {double fallback = 0}) {
