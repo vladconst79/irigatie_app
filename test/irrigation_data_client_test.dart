@@ -7,7 +7,7 @@ import 'package:irigatie_app/main.dart';
 
 void main() {
   test(
-    'fetchSnapshot normalizes /api base URL and parses status relay',
+    'fetchSnapshot normalizes /api base URL and parses relay state',
     () async {
       final requested = <Uri>[];
       final client = IrrigationDataClient(
@@ -22,9 +22,6 @@ void main() {
           if (request.url.path == '/api/snapshot') {
             return _jsonResponse(_snapshotJson());
           }
-          if (request.url.path == '/api/status') {
-            return _jsonResponse(_statusJson());
-          }
           return http.Response('not found', 404);
         }),
       );
@@ -33,7 +30,6 @@ void main() {
 
       expect(requested.map((uri) => uri.toString()).toList(), [
         'https://irigatie.example.com/api/snapshot',
-        'https://irigatie.example.com/api/status',
       ]);
       expect(snapshot.statusAvailable, isTrue);
       expect(snapshot.transformerRelay?.active, isTrue);
@@ -43,32 +39,30 @@ void main() {
     },
   );
 
-  test('fetchSnapshot degrades when status endpoint fails', () async {
-    final client = IrrigationDataClient(
-      apiSettings: const ApiSettings(
-        apiUrl: 'https://irigatie.example.com',
-        apiToken: '',
-      ),
-      httpClient: MockClient((request) async {
-        if (request.url.path == '/api/snapshot') {
-          return _jsonResponse(_snapshotJson());
-        }
-        if (request.url.path == '/api/status') {
-          return http.Response(
-            jsonEncode({'ok': false, 'error': 'status unavailable'}),
-            503,
-          );
-        }
-        return http.Response('not found', 404);
-      }),
-    );
+  test(
+    'fetchSnapshot reflects unavailable status from snapshot payload',
+    () async {
+      final client = IrrigationDataClient(
+        apiSettings: const ApiSettings(
+          apiUrl: 'https://irigatie.example.com',
+          apiToken: '',
+        ),
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/snapshot') {
+            return _jsonResponse(_snapshotJson(statusAvailable: false));
+          }
+          return http.Response('not found', 404);
+        }),
+      );
 
-    final snapshot = await client.fetchSnapshot();
+      final snapshot = await client.fetchSnapshot();
 
-    expect(snapshot.statusAvailable, isFalse);
-    expect(snapshot.transformerRelay, isNull);
-    expect(snapshot.gatewayOnline, isTrue);
-  });
+      expect(snapshot.statusAvailable, isFalse);
+      expect(snapshot.transformerRelay?.active, isNull);
+      expect(snapshot.transformerRelay?.value, isNull);
+      expect(snapshot.gatewayOnline, isTrue);
+    },
+  );
 
   test(
     'fetchWateringHistory sends query parameters on relative API URL',
@@ -106,11 +100,21 @@ http.Response _jsonResponse(Map<String, Object?> body) {
   );
 }
 
-Map<String, Object?> _snapshotJson() {
+Map<String, Object?> _snapshotJson({bool statusAvailable = true}) {
   return {
     'ok': true,
     'database': {'ok': true, 'name': 'irigatie'},
     'gateway': {'online': true, 'socket_path': '/run/irigatie/control.sock'},
+    'status': {
+      'available': statusAvailable,
+      'error': statusAvailable ? null : 'status_unavailable',
+    },
+    'relays': {
+      'transformer': {
+        'active': statusAvailable ? true : null,
+        'value': statusAvailable ? 1 : null,
+      },
+    },
     'queue': {'pending': 1, 'max': 4},
     'runtime': {
       'state': 'running',
@@ -177,50 +181,5 @@ Map<String, Object?> _snapshotJson() {
         'zone_durations': {'1': 5},
       },
     ],
-  };
-}
-
-Map<String, Object?> _statusJson() {
-  return {
-    'ok': true,
-    'gateway': {
-      'state': 'running',
-      'socket_path': '/run/irigatie/control.sock',
-      'socket_exists': true,
-      'daemon_status_supported': true,
-    },
-    'daemon': {
-      'ok': true,
-      'daemon_state': 'running',
-      'current_program': 12,
-      'current_zone': 1,
-      'remaining_seconds': 120,
-      'last_rain_update': null,
-      'db': {'ok': true, 'error': null},
-      'relay_state': {
-        'transformer': {'active': true, 'value': 1},
-        'zones': {
-          '1': {'active': true, 'value': 1},
-        },
-      },
-      'runtime': null,
-      'queue': {
-        'pending_watering_commands': 0,
-        'max_pending_watering_commands': 4,
-      },
-      'schedule_reload': {
-        'state': 'ok',
-        'last_started_at': null,
-        'last_finished_at': null,
-        'error': null,
-      },
-      'checks': {
-        'daemon_ok': true,
-        'db_ok': true,
-        'socket_ok': true,
-        'relay_safety_ok': true,
-        'queue_ok': true,
-      },
-    },
   };
 }

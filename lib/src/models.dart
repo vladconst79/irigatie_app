@@ -516,10 +516,7 @@ class IrrigationSnapshot {
     );
   }
 
-  factory IrrigationSnapshot.fromJson(
-    Map<String, dynamic> json, {
-    Map<String, dynamic>? statusJson,
-  }) {
+  factory IrrigationSnapshot.fromJson(Map<String, dynamic> json) {
     final rawZones = _asList(json['zones']);
     final zones = <IrrigationZone>[
       for (var index = 0; index < rawZones.length; index += 1)
@@ -539,9 +536,9 @@ class IrrigationSnapshot {
     final rawQueue = _asMap(json['queue']);
     final rawSchedules = _asList(json['schedules']);
     final rawManualPrograms = _asList(json['manual_programs']);
-    final rawStatusDaemon = _asMap(statusJson?['daemon']);
-    final rawRelayState = _asMap(rawStatusDaemon['relay_state']);
-    final rawTransformerRelay = _asMap(rawRelayState['transformer']);
+    final rawStatus = _asMap(json['status']);
+    final rawRelays = _asMap(json['relays']);
+    final rawTransformerRelay = _asMap(rawRelays['transformer']);
     final currentZoneId = _nullableInt(rawRuntime['zone_id']);
     final currentProgramId = _nullableInt(rawRuntime['program_id']);
 
@@ -564,7 +561,7 @@ class IrrigationSnapshot {
       rainfall24h: Rainfall24h.fromJson(rawRainfall24h, rawLastRain),
       pendingCommands: _asInt(rawQueue['pending']),
       maxPendingCommands: _asInt(rawQueue['max'], fallback: 4),
-      statusAvailable: statusJson != null,
+      statusAvailable: _asBool(rawStatus['available']),
       transformerRelay: rawTransformerRelay.isEmpty
           ? null
           : RelayStatus.fromJson(rawTransformerRelay),

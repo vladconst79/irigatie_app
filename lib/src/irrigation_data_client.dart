@@ -26,21 +26,8 @@ class IrrigationDataClient {
         .get(uri, headers: _headers())
         .timeout(readTimeout);
     final decoded = _decodeApiObject(response, allowApplicationError: true);
-    final status = await _fetchStatusOrNull();
 
-    return IrrigationSnapshot.fromJson(decoded, statusJson: status);
-  }
-
-  Future<Map<String, dynamic>?> _fetchStatusOrNull() async {
-    try {
-      final uri = _apiUri('/api/status');
-      final response = await _httpClient
-          .get(uri, headers: _headers())
-          .timeout(readTimeout);
-      return _decodeApiObject(response);
-    } catch (_) {
-      return null;
-    }
+    return IrrigationSnapshot.fromJson(decoded);
   }
 
   Future<WateringHistoryPage> fetchWateringHistory({
