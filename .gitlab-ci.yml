@@ -93,7 +93,11 @@ build_ios_unsigned:
     - export GEM_HOME="$CI_PROJECT_DIR/.gem"
     - export PATH="$GEM_HOME/bin:$PATH"
     - test -x "$MACOS_FLUTTER_BIN/flutter"
-    - command -v pod || gem install cocoapods --no-document
+    - |
+      if ! command -v pod >/dev/null; then
+        gem install ffi -v 1.17.4 --no-document
+        gem install cocoapods -v 1.16.2 --no-document
+      fi
     - pod --version
     - flutter --version
     - flutter pub get
