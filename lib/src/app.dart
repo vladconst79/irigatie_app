@@ -77,12 +77,12 @@ class _IrrigationHomeState extends State<IrrigationHome> {
       _isLoading = false;
     } else {
       _loadSnapshot();
-      _pollTimer = Timer.periodic(_pollInterval, (_) {
-        if (_selectedIndex == 0) {
-          _loadSnapshot(showLoading: false);
-        }
-      });
     }
+    _pollTimer = Timer.periodic(_pollInterval, (_) {
+      if (_selectedIndex == 0) {
+        _loadSnapshot(showLoading: false);
+      }
+    });
   }
 
   @override
