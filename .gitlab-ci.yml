@@ -89,17 +89,13 @@ build_ios_unsigned:
       - .dart_tool/
       - .gem/
   before_script:
-    - export PATH="$MACOS_FLUTTER_BIN:$PATH"
+    - export PATH="/opt/homebrew/opt/ruby/bin:/usr/local/opt/ruby/bin:$MACOS_FLUTTER_BIN:$PATH"
     - export GEM_HOME="$CI_PROJECT_DIR/.gem"
     - export PATH="$GEM_HOME/bin:$PATH"
+    - ruby --version
+    - gem --version
     - test -x "$MACOS_FLUTTER_BIN/flutter"
-    - |
-      if ! command -v pod >/dev/null; then
-        gem install securerandom -v 0.3.2 --no-document
-        gem install activesupport -v 6.1.7.10 --no-document
-        gem install ffi -v 1.15.5 --no-document
-        gem install cocoapods -v 1.15.2 --no-document
-      fi
+    - command -v pod || gem install cocoapods --no-document
     - pod --version
     - flutter --version
     - flutter pub get
