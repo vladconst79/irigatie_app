@@ -744,7 +744,10 @@ class DashboardScreen extends StatelessWidget {
                   icon: const Icon(Icons.refresh_rounded),
                   label: const Text('Refresh'),
                 ),
-                child: _RelayList(zones: snapshot.zones),
+                child: _RelayList(
+                  transformerRelay: snapshot.transformerRelay,
+                  zones: snapshot.zones,
+                ),
               ),
               _Panel(
                 title: 'Runtime',
@@ -2194,19 +2197,22 @@ class _RainfallSourceValue extends StatelessWidget {
 }
 
 class _RelayList extends StatelessWidget {
-  const _RelayList({required this.zones});
+  const _RelayList({required this.transformerRelay, required this.zones});
 
+  final RelayStatus? transformerRelay;
   final List<IrrigationZone> zones;
 
   @override
   Widget build(BuildContext context) {
+    final transformer = transformerRelay;
+
     return Column(
       children: [
         _RelayRow(
           name: 'Transformator',
           icon: Icons.electrical_services_rounded,
-          active: zones.any((zone) => zone.relayActive),
-          value: zones.any((zone) => zone.relayActive) ? 1 : 0,
+          active: transformer?.active,
+          value: transformer?.value,
         ),
         ...zones.map(
           (zone) => _RelayRow(
@@ -2215,7 +2221,7 @@ class _RelayList extends StatelessWidget {
                 ? Icons.water_rounded
                 : Icons.grass_rounded,
             active: zone.relayActive,
-            value: zone.relayActive ? 1 : 0,
+            value: zone.relayValue,
           ),
         ),
       ],
@@ -2233,16 +2239,21 @@ class _RelayRow extends StatelessWidget {
 
   final String name;
   final IconData icon;
-  final bool active;
-  final int value;
+  final bool? active;
+  final double? value;
 
   @override
   Widget build(BuildContext context) {
+    final isActive = active ?? false;
+
     return ListTile(
       leading: Icon(icon),
       title: Text(name),
-      subtitle: Text('GPIO value $value'),
-      trailing: _StateChip(active ? 'activ' : 'oprit', active),
+      subtitle: Text('GPIO value ${_formatRelayValue(value)}'),
+      trailing: _StateChip(
+        active == null ? 'necunoscut' : (isActive ? 'activ' : 'oprit'),
+        isActive,
+      ),
     );
   }
 }
@@ -2812,6 +2823,7 @@ class IrrigationZone {
     required this.type,
     required this.enabled,
     required this.relayActive,
+    required this.relayValue,
     required this.color,
   });
 
@@ -2820,6 +2832,7 @@ class IrrigationZone {
   final ZoneType type;
   final bool enabled;
   final bool relayActive;
+  final double? relayValue;
   final Color color;
 
   IconData get icon =>
@@ -2832,7 +2845,22 @@ class IrrigationZone {
       type: _zoneTypeFromDatabaseValue(json['type']),
       enabled: _asBool(json['enabled'], fallback: true),
       relayActive: _asBool(json['relay_active']),
+      relayValue: _nullableDouble(json['relay_value']),
       color: _zoneColors[index % _zoneColors.length],
+    );
+  }
+}
+
+class RelayStatus {
+  const RelayStatus({required this.active, required this.value});
+
+  final bool? active;
+  final double? value;
+
+  factory RelayStatus.fromJson(Map<String, dynamic> json) {
+    return RelayStatus(
+      active: _nullableBool(json['active']),
+      value: _nullableDouble(json['value']),
     );
   }
 }
@@ -3204,8 +3232,19 @@ class IrrigationDataClient {
     final uri = _apiUri('/api/snapshot');
     final response = await _httpClient.get(uri, headers: _headers());
     final decoded = _decodeApiObject(response, allowApplicationError: true);
+    final status = await _fetchStatusOrNull();
 
-    return IrrigationSnapshot.fromJson(decoded);
+    return IrrigationSnapshot.fromJson(decoded, statusJson: status);
+  }
+
+  Future<Map<String, dynamic>?> _fetchStatusOrNull() async {
+    try {
+      final uri = _apiUri('/api/status');
+      final response = await _httpClient.get(uri, headers: _headers());
+      return _decodeApiObject(response);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<WateringHistoryPage> fetchWateringHistory({
@@ -3411,6 +3450,7 @@ class IrrigationSnapshot {
     required this.rainfall24h,
     required this.pendingCommands,
     required this.maxPendingCommands,
+    required this.transformerRelay,
     required this.zones,
     required this.schedules,
     required this.manualPrograms,
@@ -3430,6 +3470,7 @@ class IrrigationSnapshot {
   final Rainfall24h rainfall24h;
   final int pendingCommands;
   final int maxPendingCommands;
+  final RelayStatus? transformerRelay;
   final List<IrrigationZone> zones;
   final List<ScheduleProgram> schedules;
   final List<ManualProgram> manualPrograms;
@@ -3457,13 +3498,17 @@ class IrrigationSnapshot {
       rainfall24h: Rainfall24h.empty,
       pendingCommands: 0,
       maxPendingCommands: 4,
+      transformerRelay: null,
       zones: [],
       schedules: [],
       manualPrograms: [],
     );
   }
 
-  factory IrrigationSnapshot.fromJson(Map<String, dynamic> json) {
+  factory IrrigationSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    Map<String, dynamic>? statusJson,
+  }) {
     final rawZones = _asList(json['zones']);
     final zones = <IrrigationZone>[
       for (var index = 0; index < rawZones.length; index += 1)
@@ -3483,6 +3528,9 @@ class IrrigationSnapshot {
     final rawQueue = _asMap(json['queue']);
     final rawSchedules = _asList(json['schedules']);
     final rawManualPrograms = _asList(json['manual_programs']);
+    final rawStatusDaemon = _asMap(statusJson?['daemon']);
+    final rawRelayState = _asMap(rawStatusDaemon['relay_state']);
+    final rawTransformerRelay = _asMap(rawRelayState['transformer']);
     final currentZoneId = _nullableInt(rawRuntime['zone_id']);
     final currentProgramId = _nullableInt(rawRuntime['program_id']);
 
@@ -3505,6 +3553,9 @@ class IrrigationSnapshot {
       rainfall24h: Rainfall24h.fromJson(rawRainfall24h, rawLastRain),
       pendingCommands: _asInt(rawQueue['pending']),
       maxPendingCommands: _asInt(rawQueue['max'], fallback: 4),
+      transformerRelay: rawTransformerRelay.isEmpty
+          ? null
+          : RelayStatus.fromJson(rawTransformerRelay),
       zones: zones,
       schedules: [
         for (final item in rawSchedules)
@@ -3530,6 +3581,7 @@ class IrrigationSnapshot {
         type: ZoneType.sprinkler,
         enabled: true,
         relayActive: true,
+        relayValue: 1,
         color: Color(0xFF0E7C66),
       ),
       IrrigationZone(
@@ -3538,6 +3590,7 @@ class IrrigationSnapshot {
         type: ZoneType.drip,
         enabled: true,
         relayActive: false,
+        relayValue: 0,
         color: Color(0xFF3268A8),
       ),
       IrrigationZone(
@@ -3546,6 +3599,7 @@ class IrrigationSnapshot {
         type: ZoneType.drip,
         enabled: true,
         relayActive: false,
+        relayValue: 0,
         color: Color(0xFFD08B2F),
       ),
       IrrigationZone(
@@ -3554,6 +3608,7 @@ class IrrigationSnapshot {
         type: ZoneType.sprinkler,
         enabled: false,
         relayActive: false,
+        relayValue: 0,
         color: Color(0xFF7B5EA7),
       ),
     ];
@@ -3573,6 +3628,7 @@ class IrrigationSnapshot {
       rainfall24h: const Rainfall24h(openMeteoMm: 2.8, hardwareMm: 0.4),
       pendingCommands: 1,
       maxPendingCommands: 4,
+      transformerRelay: const RelayStatus(active: true, value: 1),
       zones: zones,
       schedules: [
         ScheduleProgram(
@@ -3657,6 +3713,7 @@ IrrigationZone _unknownZone(int id) {
     type: ZoneType.sprinkler,
     enabled: false,
     relayActive: false,
+    relayValue: null,
     color: _zoneColors[id.abs() % _zoneColors.length],
   );
 }
@@ -3731,6 +3788,22 @@ bool _asBool(Object? value, {bool fallback = false}) {
   if (text == 'true' || text == '1' || text == 'yes') return true;
   if (text == 'false' || text == '0' || text == 'no') return false;
   return fallback;
+}
+
+bool? _nullableBool(Object? value) {
+  if (value == null) return null;
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  final text = value.toString().toLowerCase();
+  if (text == 'true' || text == '1' || text == 'yes') return true;
+  if (text == 'false' || text == '0' || text == 'no') return false;
+  return null;
+}
+
+String _formatRelayValue(double? value) {
+  if (value == null) return 'N/A';
+  if (value == value.roundToDouble()) return value.round().toString();
+  return value.toStringAsFixed(2);
 }
 
 String _formatSeconds(double? value) {
