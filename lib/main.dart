@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,6 +26,7 @@ class ApiSettings {
   static const _apiTokenKey = 'irigatie.apiToken';
   static const _readTimeoutSecondsKey = 'irigatie.readTimeoutSeconds';
   static const _writeTimeoutSecondsKey = 'irigatie.writeTimeoutSeconds';
+  static const _secureStorage = FlutterSecureStorage();
 
   static const defaultReadTimeoutSeconds = 30;
   static const defaultWriteTimeoutSeconds = 60;
@@ -57,7 +60,7 @@ class ApiSettings {
 
     final preferences = await SharedPreferences.getInstance();
     final savedApiUrl = preferences.getString(_apiUrlKey);
-    final savedApiToken = preferences.getString(_apiTokenKey);
+    final savedApiToken = await _loadSavedToken(preferences);
     final savedReadTimeoutSeconds = preferences.getInt(_readTimeoutSecondsKey);
     final savedWriteTimeoutSeconds = preferences.getInt(
       _writeTimeoutSecondsKey,
@@ -130,7 +133,7 @@ class ApiSettings {
   Future<void> save() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(_apiUrlKey, _trimTrailingSlash(apiUrl));
-    await preferences.setString(_apiTokenKey, apiToken);
+    await _saveToken(preferences, apiToken);
     await preferences.setInt(
       _readTimeoutSecondsKey,
       _validTimeoutSeconds(
@@ -150,7 +153,7 @@ class ApiSettings {
   Future<void> clearSaved() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_apiUrlKey);
-    await preferences.remove(_apiTokenKey);
+    await _clearSavedToken(preferences);
     await preferences.remove(_readTimeoutSecondsKey);
     await preferences.remove(_writeTimeoutSecondsKey);
   }
@@ -158,6 +161,50 @@ class ApiSettings {
   Duration get readTimeout => Duration(seconds: readTimeoutSeconds);
 
   Duration get writeTimeout => Duration(seconds: writeTimeoutSeconds);
+
+  static bool get _usesSecureTokenStorage {
+    return !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+  }
+
+  static Future<String?> _loadSavedToken(SharedPreferences preferences) async {
+    final prefsToken = preferences.getString(_apiTokenKey);
+    if (!_usesSecureTokenStorage) return prefsToken;
+
+    final secureToken = await _secureStorage.read(key: _apiTokenKey);
+    if (secureToken != null && secureToken.trim().isNotEmpty) {
+      return secureToken;
+    }
+
+    if (prefsToken != null && prefsToken.trim().isNotEmpty) {
+      await _secureStorage.write(key: _apiTokenKey, value: prefsToken);
+      await preferences.remove(_apiTokenKey);
+      return prefsToken;
+    }
+
+    return null;
+  }
+
+  static Future<void> _saveToken(
+    SharedPreferences preferences,
+    String token,
+  ) async {
+    if (!_usesSecureTokenStorage) {
+      await preferences.setString(_apiTokenKey, token);
+      return;
+    }
+
+    await _secureStorage.write(key: _apiTokenKey, value: token);
+    await preferences.remove(_apiTokenKey);
+  }
+
+  static Future<void> _clearSavedToken(SharedPreferences preferences) async {
+    await preferences.remove(_apiTokenKey);
+    if (_usesSecureTokenStorage) {
+      await _secureStorage.delete(key: _apiTokenKey);
+    }
+  }
 }
 
 class IrrigationApp extends StatelessWidget {
