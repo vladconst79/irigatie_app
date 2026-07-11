@@ -143,7 +143,15 @@ flutter build ios --release
 ## Project Layout
 
 ```text
-lib/main.dart                         Flutter app, models, API client, screens
+lib/main.dart                         App entrypoint and library parts
+lib/src/api_settings.dart             API URL/token/timeout settings
+lib/src/irrigation_data_client.dart   HTTP gateway client
+lib/src/app.dart                      Root app shell and state orchestration
+lib/src/screens.dart                  Main dashboard/configuration screens
+lib/src/dialogs.dart                  Edit dialogs
+lib/src/widgets.dart                  Shared UI widgets
+lib/src/models.dart                   Domain models and write requests
+lib/src/helpers.dart                  Parsing, formatting, validation helpers
 assets/config/irigatie_app.sample.json Sample API configuration
 docs/                                Backend/API implementation notes
 test/widget_test.dart                Smoke test for the dashboard
