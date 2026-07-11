@@ -95,8 +95,8 @@ build_ios_unsigned:
     - test -x "$MACOS_FLUTTER_BIN/flutter"
     - |
       if ! command -v pod >/dev/null; then
-        gem install ffi -v 1.17.4 --no-document
-        gem install cocoapods -v 1.16.2 --no-document
+        gem install ffi -v 1.15.5 --no-document
+        gem install cocoapods -v 1.15.2 --no-document
       fi
     - pod --version
     - flutter --version
