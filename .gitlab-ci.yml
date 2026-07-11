@@ -92,6 +92,8 @@ build_ios_unsigned:
     - export PATH="/opt/homebrew/opt/ruby/bin:/usr/local/opt/ruby/bin:$MACOS_FLUTTER_BIN:$PATH"
     - export GEM_HOME="$CI_PROJECT_DIR/.gem"
     - export PATH="$GEM_HOME/bin:$PATH"
+    - export LANG=en_US.UTF-8
+    - export LC_ALL=en_US.UTF-8
     - ruby --version
     - gem --version
     - test -x "$MACOS_FLUTTER_BIN/flutter"
