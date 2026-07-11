@@ -739,11 +739,6 @@ class DashboardScreen extends StatelessWidget {
             final children = [
               _Panel(
                 title: 'Relee si zone',
-                action: FilledButton.tonalIcon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Refresh'),
-                ),
                 child: _RelayList(
                   transformerRelay: snapshot.transformerRelay,
                   zones: snapshot.zones,
