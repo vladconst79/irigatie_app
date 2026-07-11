@@ -458,6 +458,7 @@ class IrrigationSnapshot {
     required this.rainfall24h,
     required this.pendingCommands,
     required this.maxPendingCommands,
+    required this.statusAvailable,
     required this.transformerRelay,
     required this.zones,
     required this.schedules,
@@ -478,6 +479,7 @@ class IrrigationSnapshot {
   final Rainfall24h rainfall24h;
   final int pendingCommands;
   final int maxPendingCommands;
+  final bool statusAvailable;
   final RelayStatus? transformerRelay;
   final List<IrrigationZone> zones;
   final List<ScheduleProgram> schedules;
@@ -506,6 +508,7 @@ class IrrigationSnapshot {
       rainfall24h: Rainfall24h.empty,
       pendingCommands: 0,
       maxPendingCommands: 4,
+      statusAvailable: false,
       transformerRelay: null,
       zones: [],
       schedules: [],
@@ -561,6 +564,7 @@ class IrrigationSnapshot {
       rainfall24h: Rainfall24h.fromJson(rawRainfall24h, rawLastRain),
       pendingCommands: _asInt(rawQueue['pending']),
       maxPendingCommands: _asInt(rawQueue['max'], fallback: 4),
+      statusAvailable: statusJson != null,
       transformerRelay: rawTransformerRelay.isEmpty
           ? null
           : RelayStatus.fromJson(rawTransformerRelay),
@@ -636,6 +640,7 @@ class IrrigationSnapshot {
       rainfall24h: const Rainfall24h(openMeteoMm: 2.8, hardwareMm: 0.4),
       pendingCommands: 1,
       maxPendingCommands: 4,
+      statusAvailable: true,
       transformerRelay: const RelayStatus(active: true, value: 1),
       zones: zones,
       schedules: [

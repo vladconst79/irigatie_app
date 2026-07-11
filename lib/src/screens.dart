@@ -56,6 +56,7 @@ class DashboardScreen extends StatelessWidget {
               _Panel(
                 title: 'Relee si zone',
                 child: _RelayList(
+                  statusAvailable: snapshot.statusAvailable,
                   transformerRelay: snapshot.transformerRelay,
                   zones: snapshot.zones,
                 ),

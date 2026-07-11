@@ -376,8 +376,13 @@ class _RainfallSourceValue extends StatelessWidget {
 }
 
 class _RelayList extends StatelessWidget {
-  const _RelayList({required this.transformerRelay, required this.zones});
+  const _RelayList({
+    required this.statusAvailable,
+    required this.transformerRelay,
+    required this.zones,
+  });
 
+  final bool statusAvailable;
   final RelayStatus? transformerRelay;
   final List<IrrigationZone> zones;
 
@@ -387,6 +392,7 @@ class _RelayList extends StatelessWidget {
 
     return Column(
       children: [
+        if (!statusAvailable) const _StatusUnavailableRow(),
         _RelayRow(
           name: 'Transformator',
           icon: Icons.electrical_services_rounded,
@@ -404,6 +410,22 @@ class _RelayList extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StatusUnavailableRow extends StatelessWidget {
+  const _StatusUnavailableRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return ListTile(
+      leading: Icon(Icons.warning_amber_rounded, color: colors.error),
+      title: const Text('Status daemon indisponibil'),
+      subtitle: const Text('Starea transformatorului nu a putut fi citita.'),
+      trailing: _StateChip('status', false),
     );
   }
 }
