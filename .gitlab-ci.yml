@@ -70,7 +70,7 @@ build_android_apk:
     paths:
       - build/app/outputs/flutter-apk/app-release.apk
 
-# Requires a GitLab macOS runner with Xcode, CocoaPods, and Flutter installed.
+# Requires a GitLab macOS runner with Xcode and Flutter installed.
 # For a distributable IPA, configure Apple signing on that runner first.
 build_ios_unsigned:
   stage: build
@@ -87,9 +87,14 @@ build_ios_unsigned:
     paths:
       - .pub-cache/
       - .dart_tool/
+      - .gem/
   before_script:
     - export PATH="$MACOS_FLUTTER_BIN:$PATH"
+    - export GEM_HOME="$CI_PROJECT_DIR/.gem"
+    - export PATH="$GEM_HOME/bin:$PATH"
     - test -x "$MACOS_FLUTTER_BIN/flutter"
+    - command -v pod || gem install cocoapods --no-document
+    - pod --version
     - flutter --version
     - flutter pub get
   script:
