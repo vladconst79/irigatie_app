@@ -1671,10 +1671,14 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     _maxRainController = TextEditingController(
       text: (schedule?.maxRainMm ?? 0).toString(),
     );
+    _dayOfMonthController.addListener(_revalidateScheduleFields);
+    _dayOfWeekController.addListener(_revalidateScheduleFields);
   }
 
   @override
   void dispose() {
+    _dayOfMonthController.removeListener(_revalidateScheduleFields);
+    _dayOfWeekController.removeListener(_revalidateScheduleFields);
     _monthController.dispose();
     _dayOfMonthController.dispose();
     _dayOfWeekController.dispose();
@@ -1725,22 +1729,46 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                       _monthController,
                       'Luna',
                       Icons.calendar_view_month_rounded,
+                      validator: (value) => _scheduleField(
+                        value,
+                        minimum: 1,
+                        maximum: 12,
+                        fieldName: 'Luna',
+                      ),
                     ),
                     _textField(
                       _dayOfMonthController,
                       'Zi luna',
                       Icons.today_rounded,
+                      validator: _validateDayOfMonth,
                     ),
                     _textField(
                       _dayOfWeekController,
                       'Zi saptamana',
                       Icons.date_range_rounded,
+                      validator: _validateDayOfWeek,
                     ),
-                    _textField(_hourController, 'Ora', Icons.schedule_rounded),
+                    _textField(
+                      _hourController,
+                      'Ora',
+                      Icons.schedule_rounded,
+                      validator: (value) => _scheduleField(
+                        value,
+                        minimum: 0,
+                        maximum: 23,
+                        fieldName: 'Ora',
+                      ),
+                    ),
                     _textField(
                       _minuteController,
                       'Minut',
                       Icons.more_time_rounded,
+                      validator: (value) => _scheduleField(
+                        value,
+                        minimum: 0,
+                        maximum: 59,
+                        fieldName: 'Minut',
+                      ),
                     ),
                     TextFormField(
                       controller: _durationController,
@@ -1794,8 +1822,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   Widget _textField(
     TextEditingController controller,
     String label,
-    IconData icon,
-  ) {
+    IconData icon, {
+    String? Function(String?)? validator,
+  }) {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
@@ -1803,8 +1832,44 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         prefixIcon: Icon(icon),
         border: const OutlineInputBorder(),
       ),
-      validator: _requiredText,
+      validator: validator ?? _requiredText,
     );
+  }
+
+  void _revalidateScheduleFields() {
+    _formKey.currentState?.validate();
+  }
+
+  String? _validateDayOfMonth(String? value) {
+    final expressionError = _scheduleField(
+      value,
+      minimum: 1,
+      maximum: 31,
+      fieldName: 'Zi luna',
+      allowStep: true,
+    );
+    if (expressionError != null) return expressionError;
+    return _validateDayRestrictionCombination();
+  }
+
+  String? _validateDayOfWeek(String? value) {
+    final expressionError = _scheduleField(
+      value,
+      minimum: 0,
+      maximum: 7,
+      fieldName: 'Zi saptamana',
+      allowStep: true,
+    );
+    if (expressionError != null) return expressionError;
+    return _validateDayRestrictionCombination();
+  }
+
+  String? _validateDayRestrictionCombination() {
+    if (_dayOfMonthController.text.trim() != '*' &&
+        _dayOfWeekController.text.trim() != '*') {
+      return 'Foloseste * aici sau la celalalt camp de zi';
+    }
+    return null;
   }
 
   void _submit() {
@@ -4023,6 +4088,53 @@ String _formatMillimeters(double? value) {
 
 String? _requiredText(String? value) {
   return value == null || value.trim().isEmpty ? 'Camp obligatoriu' : null;
+}
+
+String? _scheduleField(
+  String? value, {
+  required int minimum,
+  required int maximum,
+  required String fieldName,
+  bool allowStep = false,
+}) {
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return 'Camp obligatoriu';
+  if (text.length > 10) return 'Maxim 10 caractere';
+  if (text == '*') return null;
+
+  for (final rawPart in text.split(',')) {
+    final part = rawPart.trim();
+    if (part.isEmpty) return '$fieldName contine o valoare goala';
+
+    if (part.startsWith('*/')) {
+      if (!allowStep) return '$fieldName nu accepta sintaxa cu pas';
+      final step = int.tryParse(part.substring(2));
+      if (step == null || step <= 0) return '$fieldName are pas invalid';
+      continue;
+    }
+
+    final rangeMatch = RegExp(r'^(\d+)-(\d+)$').firstMatch(part);
+    if (rangeMatch != null) {
+      final start = int.parse(rangeMatch.group(1)!);
+      final end = int.parse(rangeMatch.group(2)!);
+      if (start < minimum ||
+          start > maximum ||
+          end < minimum ||
+          end > maximum) {
+        return '$fieldName trebuie sa fie intre $minimum si $maximum';
+      }
+      if (start > end) return '$fieldName are interval descrescator';
+      continue;
+    }
+
+    final number = int.tryParse(part);
+    if (number == null) return '$fieldName are sintaxa invalida';
+    if (number < minimum || number > maximum) {
+      return '$fieldName trebuie sa fie intre $minimum si $maximum';
+    }
+  }
+
+  return null;
 }
 
 String? _positiveInt(String? value, {int? max}) {
