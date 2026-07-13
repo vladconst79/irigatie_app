@@ -502,96 +502,327 @@ class _ScheduleRow extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final enabled = schedule.enabled && schedule.zone.enabled;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: enabled
-            ? null
-            : colors.surfaceContainerHighest.withValues(alpha: 0.35),
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+    return Material(
+      color: enabled
+          ? colors.surface
+          : colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      child: InkWell(
+        onTap: () => _showScheduleDetails(context, enabled: enabled),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: colors.outlineVariant)),
+          ),
+          child: Opacity(
+            opacity: enabled ? 1 : 0.62,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+
+                  final summary = Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _StateChip(enabled ? 'activ' : 'inactiv', enabled),
+                      _InfoChip(
+                        Icons.calendar_view_month_rounded,
+                        schedule.monthLabel,
+                      ),
+                      _InfoChip(
+                        Icons.calendar_month_rounded,
+                        schedule.cronLabel,
+                      ),
+                      _InfoChip(
+                        Icons.timer_rounded,
+                        '${schedule.durationMinutes} min',
+                      ),
+                    ],
+                  );
+
+                  final trailing = isExecuting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.chevron_right_rounded,
+                          color: colors.onSurfaceVariant,
+                        );
+                  final actions = _ScheduleInlineActions(
+                    enabled: enabled,
+                    isExecuting: isExecuting,
+                    onExecute: onExecute,
+                    onEdit: onEdit,
+                    onDelete: onDelete,
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: _ScheduleTitle(schedule: schedule)),
+                            const SizedBox(width: 12),
+                            trailing,
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        summary,
+                        const SizedBox(height: 12),
+                        actions,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _ScheduleTitle(schedule: schedule),
+                      ),
+                      Expanded(flex: 4, child: summary),
+                      const SizedBox(width: 12),
+                      actions,
+                      const SizedBox(width: 8),
+                      trailing,
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
       ),
-      child: Opacity(
-        opacity: enabled ? 1 : 0.62,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 760;
+    );
+  }
 
-              final summary = Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _StateChip(enabled ? 'activ' : 'inactiv', enabled),
-                  _InfoChip(
-                    Icons.calendar_view_month_rounded,
-                    schedule.monthLabel,
-                  ),
-                  _InfoChip(Icons.calendar_month_rounded, schedule.cronLabel),
-                  _InfoChip(
-                    Icons.timer_rounded,
-                    '${schedule.durationMinutes} min',
-                  ),
-                  _InfoChip(
-                    Icons.cloudy_snowing,
-                    'max ${schedule.maxRainMm.toStringAsFixed(1)} mm',
-                  ),
-                  _InfoChip(
-                    Icons.water_drop_outlined,
-                    '${schedule.currentRainMm.toStringAsFixed(1)} mm',
-                  ),
-                ],
-              );
+  void _showScheduleDetails(BuildContext context, {required bool enabled}) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => _ScheduleDetailsSheet(
+        schedule: schedule,
+        enabled: enabled,
+        isExecuting: isExecuting,
+        onExecute: () {
+          Navigator.of(sheetContext).pop();
+          onExecute();
+        },
+        onEdit: () {
+          Navigator.of(sheetContext).pop();
+          onEdit();
+        },
+        onDelete: () {
+          Navigator.of(sheetContext).pop();
+          onDelete();
+        },
+      ),
+    );
+  }
+}
 
-              final actions = Wrap(
-                spacing: 8,
-                children: [
-                  IconButton.filledTonal(
-                    onPressed: onEdit,
-                    tooltip: 'Editeaza',
-                    icon: const Icon(Icons.edit_rounded),
-                  ),
-                  IconButton.filledTonal(
-                    onPressed: onDelete,
-                    tooltip: 'Sterge',
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-                  IconButton.filled(
-                    onPressed: enabled && !isExecuting ? onExecute : null,
-                    tooltip: 'Executa acum',
-                    icon: isExecuting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.play_arrow_rounded),
-                  ),
-                ],
-              );
+class _ScheduleInlineActions extends StatelessWidget {
+  const _ScheduleInlineActions({
+    required this.enabled,
+    required this.isExecuting,
+    required this.onExecute,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
-              if (compact) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  final bool enabled;
+  final bool isExecuting;
+  final VoidCallback onExecute;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      children: [
+        IconButton.filledTonal(
+          onPressed: onEdit,
+          tooltip: 'Editeaza',
+          icon: const Icon(Icons.edit_rounded),
+        ),
+        IconButton.filledTonal(
+          onPressed: onDelete,
+          tooltip: 'Sterge',
+          icon: const Icon(Icons.delete_outline_rounded),
+        ),
+        IconButton.filled(
+          onPressed: enabled && !isExecuting ? onExecute : null,
+          tooltip: 'Executa acum',
+          icon: isExecuting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow_rounded),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScheduleDetailsSheet extends StatelessWidget {
+  const _ScheduleDetailsSheet({
+    required this.schedule,
+    required this.enabled,
+    required this.isExecuting,
+    required this.onExecute,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final ScheduleProgram schedule;
+  final bool enabled;
+  final bool isExecuting;
+  final VoidCallback onExecute;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          0,
+          20,
+          20 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: schedule.zone.color.withValues(alpha: 0.16),
+                  child: Icon(schedule.zone.icon, color: schedule.zone.color),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        schedule.zone.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text('Program #${schedule.id}'),
+                    ],
+                  ),
+                ),
+                _StateChip(enabled ? 'activ' : 'inactiv', enabled),
+              ],
+            ),
+            const SizedBox(height: 18),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: colors.outlineVariant),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
                   children: [
-                    _ScheduleTitle(schedule: schedule),
-                    const SizedBox(height: 12),
-                    summary,
-                    const SizedBox(height: 12),
-                    actions,
+                    _DetailLine('Luna', schedule.month),
+                    _DetailLine('Zi luna', schedule.dayOfMonth),
+                    _DetailLine('Zi saptamana', schedule.dayOfWeek),
+                    _DetailLine(
+                      'Ora',
+                      '${schedule.hour}:${schedule.minute.padLeft(2, '0')}',
+                    ),
+                    _DetailLine('Durata', '${schedule.durationMinutes} minute'),
+                    _DetailLine(
+                      'Ploaie max',
+                      '${schedule.maxRainMm.toStringAsFixed(1)} mm',
+                    ),
+                    _DetailLine(
+                      'Ploaie curenta',
+                      '${schedule.currentRainMm.toStringAsFixed(1)} mm',
+                    ),
+                    _DetailLine(
+                      'zile_fp',
+                      schedule.daysWithoutRain?.toString() ?? 'N/A',
+                    ),
+                    _DetailLine(
+                      'Traseu activ',
+                      schedule.zone.enabled ? 'da' : 'nu',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 420;
+                final executeButton = FilledButton.icon(
+                  onPressed: enabled && !isExecuting ? onExecute : null,
+                  icon: isExecuting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow_rounded),
+                  label: Text(isExecuting ? 'Trimit' : 'Executa'),
+                );
+                final editButton = FilledButton.tonalIcon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_rounded),
+                  label: const Text('Editeaza'),
+                );
+                final deleteButton = OutlinedButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Sterge'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.error,
+                  ),
+                );
+
+                if (compact) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      executeButton,
+                      const SizedBox(height: 8),
+                      editButton,
+                      const SizedBox(height: 8),
+                      deleteButton,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: deleteButton),
+                    const SizedBox(width: 8),
+                    Expanded(child: editButton),
+                    const SizedBox(width: 8),
+                    Expanded(child: executeButton),
                   ],
                 );
-              }
-
-              return Row(
-                children: [
-                  Expanded(flex: 3, child: _ScheduleTitle(schedule: schedule)),
-                  Expanded(flex: 4, child: summary),
-                  const SizedBox(width: 12),
-                  actions,
-                ],
-              );
-            },
-          ),
+              },
+            ),
+          ],
         ),
       ),
     );

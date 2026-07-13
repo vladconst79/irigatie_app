@@ -36,6 +36,7 @@ void main() {
       expect(snapshot.transformerRelay?.value, 1);
       expect(snapshot.rainfall24h.openMeteoMm, 2.5);
       expect(snapshot.rainfall24h.hardwareMm, 0.4);
+      expect(snapshot.schedules.single.daysWithoutRain, 3);
     },
   );
 
@@ -171,6 +172,7 @@ Map<String, Object?> _snapshotJson({bool statusAvailable = true}) {
         'duration_minutes': 12,
         'max_rain_mm': 4,
         'current_rain_mm': 2.5,
+        'zile_fp': 3,
         'enabled': true,
       },
     ],

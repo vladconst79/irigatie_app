@@ -91,6 +91,7 @@ class ScheduleProgram {
     required this.durationMinutes,
     required this.maxRainMm,
     required this.currentRainMm,
+    required this.daysWithoutRain,
     required this.enabled,
   });
 
@@ -104,6 +105,7 @@ class ScheduleProgram {
   final int durationMinutes;
   final double maxRainMm;
   final double currentRainMm;
+  final int? daysWithoutRain;
   final bool enabled;
 
   String get monthLabel => month == '*' ? 'toate lunile' : 'luna $month';
@@ -139,6 +141,9 @@ class ScheduleProgram {
       durationMinutes: _asInt(json['duration_minutes']),
       maxRainMm: _asDouble(json['max_rain_mm'], fallback: 0),
       currentRainMm: _asDouble(json['current_rain_mm'], fallback: 0),
+      daysWithoutRain: _nullableInt(
+        json['days_without_rain'] ?? json['zile_fp'],
+      ),
       enabled: _asBool(json['enabled'], fallback: true),
     );
   }
@@ -652,6 +657,7 @@ class IrrigationSnapshot {
           durationMinutes: 12,
           maxRainMm: 4,
           currentRainMm: 2.8,
+          daysWithoutRain: 1,
           enabled: true,
         ),
         ScheduleProgram(
@@ -665,6 +671,7 @@ class IrrigationSnapshot {
           durationMinutes: 8,
           maxRainMm: 3.5,
           currentRainMm: 2.8,
+          daysWithoutRain: 2,
           enabled: true,
         ),
         ScheduleProgram(
@@ -678,6 +685,7 @@ class IrrigationSnapshot {
           durationMinutes: 15,
           maxRainMm: 6,
           currentRainMm: 2.8,
+          daysWithoutRain: 4,
           enabled: false,
         ),
       ],
