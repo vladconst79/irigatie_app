@@ -140,6 +140,26 @@ Build iOS from macOS with Xcode installed:
 flutter build ios --release
 ```
 
+## Web Deployment
+
+A sanitized Apache HTTP vhost sample is available at
+`docs/apache-http-vhost.sample.conf`. It shows one simple deployment pattern:
+protect the Flutter web shell with Apache form auth, proxy `/api/` to the
+gateway, and let the gateway protect API calls with bearer-token auth.
+
+Create the Apache form-auth credentials file with `htpasswd`:
+
+```sh
+sudo apt install apache2-utils
+sudo htpasswd -c /etc/apache2/irigatie_app.htpasswd your_username
+```
+
+For additional users, omit `-c` so the existing file is not replaced:
+
+```sh
+sudo htpasswd /etc/apache2/irigatie_app.htpasswd another_username
+```
+
 ## Project Layout
 
 ```text
@@ -154,6 +174,7 @@ lib/src/models.dart                   Domain models and write requests
 lib/src/helpers.dart                  Parsing, formatting, validation helpers
 assets/config/irigatie_app.sample.json Sample API configuration
 docs/                                Backend/API implementation notes
+docs/apache-http-vhost.sample.conf    Apache HTTP deployment sample
 test/widget_test.dart                Smoke test for the dashboard
 web/                                 Web shell and PWA metadata
 ```
