@@ -122,7 +122,7 @@ class _ZoneRainStateDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _DetailLine('Credit ploaie', _formatMillimeters(zone.rainCreditMm)),
+        _DetailLine('Ploaie', _formatMillimeters(zone.rainCreditMm)),
         _DetailLine(
           'Fara ploaie',
           _formatCyclesWithoutRain(zone.cyclesWithoutRain),

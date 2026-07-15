@@ -993,55 +993,149 @@ class _ZoneEditorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final summary = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _StateChip(zone.enabled ? 'activ' : 'inactiv', zone.enabled),
+        _InfoChip(zone.icon, zone.type.label),
+        _InfoChip(
+          Icons.water_drop_rounded,
+          'ploaie ${_formatMillimeters(zone.rainCreditMm)}',
+        ),
+        _InfoChip(
+          Icons.event_repeat_rounded,
+          'fara ploaie ${_formatCyclesWithoutRain(zone.cyclesWithoutRain)}',
+        ),
+      ],
+    );
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: zone.enabled
-            ? null
-            : colors.surfaceContainerHighest.withValues(alpha: 0.35),
-      ),
-      child: Opacity(
-        opacity: zone.enabled ? 1 : 0.62,
-        child: ListTile(
-          leading: CircleAvatar(
-            backgroundColor: zone.color.withValues(alpha: 0.16),
-            child: Icon(zone.icon, color: zone.color),
+    return Material(
+      color: zone.enabled
+          ? colors.surface
+          : colors.surfaceContainerHighest.withValues(alpha: 0.35),
+      child: InkWell(
+        onTap: onEdit,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: colors.outlineVariant)),
           ),
-          title: Text(zone.name),
-          subtitle: Text(
-            [
-              zone.type.label,
-              'credit ${_formatMillimeters(zone.rainCreditMm)}',
-              'fara ploaie ${_formatCyclesWithoutRain(zone.cyclesWithoutRain)}',
-            ].join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Wrap(
-            spacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _StateChip(zone.enabled ? 'activ' : 'inactiv', zone.enabled),
-              IconButton.filled(
-                onPressed: zone.enabled && !isTesting ? onTest : null,
-                tooltip: 'Testeaza zona',
-                icon: isTesting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.play_arrow_rounded),
+          child: Opacity(
+            opacity: zone.enabled ? 1 : 0.62,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 720;
+                  final actions = _ZoneInlineActions(
+                    enabled: zone.enabled,
+                    isTesting: isTesting,
+                    onTest: onTest,
+                    onEdit: onEdit,
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ZoneTitle(zone: zone),
+                        const SizedBox(height: 12),
+                        summary,
+                        const SizedBox(height: 12),
+                        actions,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(flex: 3, child: _ZoneTitle(zone: zone)),
+                      Expanded(flex: 4, child: summary),
+                      const SizedBox(width: 12),
+                      actions,
+                    ],
+                  );
+                },
               ),
-              IconButton.filledTonal(
-                onPressed: onEdit,
-                tooltip: 'Editeaza',
-                icon: const Icon(Icons.edit_rounded),
-              ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ZoneTitle extends StatelessWidget {
+  const _ZoneTitle({required this.zone});
+
+  final IrrigationZone zone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: zone.color.withValues(alpha: 0.16),
+          child: Icon(zone.icon, color: zone.color),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                zone.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              Text('Traseu #${zone.id}'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ZoneInlineActions extends StatelessWidget {
+  const _ZoneInlineActions({
+    required this.enabled,
+    required this.isTesting,
+    required this.onTest,
+    required this.onEdit,
+  });
+
+  final bool enabled;
+  final bool isTesting;
+  final VoidCallback onTest;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      children: [
+        IconButton.filledTonal(
+          onPressed: onEdit,
+          tooltip: 'Editeaza',
+          icon: const Icon(Icons.edit_rounded),
+        ),
+        IconButton.filled(
+          onPressed: enabled && !isTesting ? onTest : null,
+          tooltip: 'Testeaza zona',
+          icon: isTesting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow_rounded),
+        ),
+      ],
     );
   }
 }
