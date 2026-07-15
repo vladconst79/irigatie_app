@@ -38,6 +38,10 @@ class IrrigationZone {
     required this.enabled,
     required this.relayActive,
     required this.relayValue,
+    required this.rainCreditMm,
+    required this.cyclesWithoutRain,
+    required this.rainStateUpdatedAt,
+    required this.lastRainEventId,
     required this.color,
   });
 
@@ -47,6 +51,10 @@ class IrrigationZone {
   final bool enabled;
   final bool relayActive;
   final double? relayValue;
+  final double? rainCreditMm;
+  final int? cyclesWithoutRain;
+  final String? rainStateUpdatedAt;
+  final int? lastRainEventId;
   final Color color;
 
   IconData get icon =>
@@ -60,6 +68,10 @@ class IrrigationZone {
       enabled: _asBool(json['enabled'], fallback: true),
       relayActive: _asBool(json['relay_active']),
       relayValue: _nullableDouble(json['relay_value']),
+      rainCreditMm: _nullableDouble(json['rain_credit_mm']),
+      cyclesWithoutRain: _nullableInt(json['cycles_without_rain']),
+      rainStateUpdatedAt: _nullableString(json['rain_state_updated_at']),
+      lastRainEventId: _nullableInt(json['last_rain_event_id']),
       color: _zoneColors[index % _zoneColors.length],
     );
   }
@@ -596,6 +608,10 @@ class IrrigationSnapshot {
         enabled: true,
         relayActive: true,
         relayValue: 1,
+        rainCreditMm: 1.2,
+        cyclesWithoutRain: 1,
+        rainStateUpdatedAt: '2026-07-15 07:30:00',
+        lastRainEventId: 184,
         color: Color(0xFF0E7C66),
       ),
       IrrigationZone(
@@ -605,6 +621,10 @@ class IrrigationSnapshot {
         enabled: true,
         relayActive: false,
         relayValue: 0,
+        rainCreditMm: 0.4,
+        cyclesWithoutRain: 3,
+        rainStateUpdatedAt: '2026-07-15 07:30:00',
+        lastRainEventId: 184,
         color: Color(0xFF3268A8),
       ),
       IrrigationZone(
@@ -614,6 +634,10 @@ class IrrigationSnapshot {
         enabled: true,
         relayActive: false,
         relayValue: 0,
+        rainCreditMm: 0,
+        cyclesWithoutRain: 5,
+        rainStateUpdatedAt: '2026-07-14 21:10:00',
+        lastRainEventId: 183,
         color: Color(0xFFD08B2F),
       ),
       IrrigationZone(
@@ -623,6 +647,10 @@ class IrrigationSnapshot {
         enabled: false,
         relayActive: false,
         relayValue: 0,
+        rainCreditMm: null,
+        cyclesWithoutRain: null,
+        rainStateUpdatedAt: null,
+        lastRainEventId: null,
         color: Color(0xFF7B5EA7),
       ),
     ];

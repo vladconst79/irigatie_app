@@ -78,6 +78,12 @@ class _ZoneDialogState extends State<ZoneDialog> {
                 value: _enabled,
                 onChanged: (value) => setState(() => _enabled = value),
               ),
+              if (editing) ...[
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                _ZoneRainStateDetails(zone: widget.zone!),
+              ],
             ],
           ),
         ),
@@ -103,6 +109,33 @@ class _ZoneDialogState extends State<ZoneDialog> {
         type: _type,
         enabled: _enabled,
       ),
+    );
+  }
+}
+
+class _ZoneRainStateDetails extends StatelessWidget {
+  const _ZoneRainStateDetails({required this.zone});
+
+  final IrrigationZone zone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _DetailLine('Credit ploaie', _formatMillimeters(zone.rainCreditMm)),
+        _DetailLine(
+          'Fara ploaie',
+          _formatCyclesWithoutRain(zone.cyclesWithoutRain),
+        ),
+        _DetailLine(
+          'Actualizat',
+          _formatRainStateUpdatedAt(zone.rainStateUpdatedAt),
+        ),
+        _DetailLine(
+          'Eveniment ploaie',
+          zone.lastRainEventId?.toString() ?? 'N/A',
+        ),
+      ],
     );
   }
 }

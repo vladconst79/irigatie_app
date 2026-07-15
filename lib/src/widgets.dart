@@ -1008,7 +1008,15 @@ class _ZoneEditorRow extends StatelessWidget {
             child: Icon(zone.icon, color: zone.color),
           ),
           title: Text(zone.name),
-          subtitle: Text(zone.type.label),
+          subtitle: Text(
+            [
+              zone.type.label,
+              'credit ${_formatMillimeters(zone.rainCreditMm)}',
+              'fara ploaie ${_formatCyclesWithoutRain(zone.cyclesWithoutRain)}',
+            ].join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
           trailing: Wrap(
             spacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,

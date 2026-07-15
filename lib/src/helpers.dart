@@ -17,6 +17,10 @@ IrrigationZone _unknownZone(int id) {
     enabled: false,
     relayActive: false,
     relayValue: null,
+    rainCreditMm: null,
+    cyclesWithoutRain: null,
+    rainStateUpdatedAt: null,
+    lastRainEventId: null,
     color: _zoneColors[id.abs() % _zoneColors.length],
   );
 }
@@ -141,6 +145,16 @@ String _formatSeconds(double? value) {
 String _formatMillimeters(double? value) {
   if (value == null) return 'N/A';
   return '${value.toStringAsFixed(1)} mm';
+}
+
+String _formatCyclesWithoutRain(int? value) {
+  if (value == null) return 'N/A';
+  if (value == 1) return '1 ciclu';
+  return '$value cicluri';
+}
+
+String _formatRainStateUpdatedAt(String? value) {
+  return value == null || value.isEmpty ? 'N/A' : value;
 }
 
 String? _requiredText(String? value) {

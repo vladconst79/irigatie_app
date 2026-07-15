@@ -36,6 +36,10 @@ void main() {
       expect(snapshot.transformerRelay?.value, 1);
       expect(snapshot.rainfall24h.openMeteoMm, 2.5);
       expect(snapshot.rainfall24h.hardwareMm, 0.4);
+      expect(snapshot.zones.single.rainCreditMm, 1.25);
+      expect(snapshot.zones.single.cyclesWithoutRain, 3);
+      expect(snapshot.zones.single.rainStateUpdatedAt, '2026-07-11 06:00:00');
+      expect(snapshot.zones.single.lastRainEventId, 42);
       expect(snapshot.schedules.single.daysWithoutRain, 3);
     },
   );
@@ -158,6 +162,10 @@ Map<String, Object?> _snapshotJson({bool statusAvailable = true}) {
         'enabled': true,
         'relay_active': true,
         'relay_value': 1,
+        'rain_credit_mm': 1.25,
+        'cycles_without_rain': 3,
+        'rain_state_updated_at': '2026-07-11 06:00:00',
+        'last_rain_event_id': 42,
       },
     ],
     'schedules': [
