@@ -233,6 +233,7 @@ class _IrrigationHomeState extends State<IrrigationHome>
                         isStopping: _isStopping,
                         onStop: _stopWatering,
                         onShowWateringHistory: _showWateringHistory,
+                        onShowRainHistory: _showRainHistory,
                         apiSettings: _apiSettings,
                         onSaveApiSettings: _saveApiSettings,
                         onResetApiSettings: _resetApiSettings,
@@ -287,6 +288,15 @@ class _IrrigationHomeState extends State<IrrigationHome>
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) => _WateringHistorySheet(client: _client),
+    );
+  }
+
+  Future<void> _showRainHistory(String source) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => _RainHistorySheet(client: _client, source: source),
     );
   }
 
@@ -650,6 +660,7 @@ class _ScreenBody extends StatelessWidget {
     required this.isStopping,
     required this.onStop,
     required this.onShowWateringHistory,
+    required this.onShowRainHistory,
     required this.apiSettings,
     required this.onSaveApiSettings,
     required this.onResetApiSettings,
@@ -674,6 +685,7 @@ class _ScreenBody extends StatelessWidget {
   final bool isStopping;
   final VoidCallback onStop;
   final VoidCallback onShowWateringHistory;
+  final ValueChanged<String> onShowRainHistory;
   final ApiSettings apiSettings;
   final ValueChanged<ApiSettings> onSaveApiSettings;
   final VoidCallback onResetApiSettings;
@@ -703,6 +715,7 @@ class _ScreenBody extends StatelessWidget {
         isStopping: isStopping,
         onStop: onStop,
         onShowWateringHistory: onShowWateringHistory,
+        onShowRainHistory: onShowRainHistory,
       ),
       1 => ScheduleScreen(
         snapshot: snapshot,
@@ -729,6 +742,7 @@ class _ScreenBody extends StatelessWidget {
         isStopping: isStopping,
         onStop: onStop,
         onShowWateringHistory: onShowWateringHistory,
+        onShowRainHistory: onShowRainHistory,
       ),
     };
   }

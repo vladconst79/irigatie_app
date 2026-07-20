@@ -269,6 +269,62 @@ class Rainfall24h {
   }
 }
 
+class RainHistoryPage {
+  const RainHistoryPage({
+    required this.items,
+    required this.nextBeforeId,
+    required this.hasMore,
+  });
+
+  final List<RainHistoryItem> items;
+  final int? nextBeforeId;
+  final bool hasMore;
+
+  factory RainHistoryPage.fromJson(Map<String, dynamic> json) {
+    return RainHistoryPage(
+      items: [
+        for (final item in _asList(json['items'] ?? json['events']))
+          if (item is Map)
+            RainHistoryItem.fromJson(Map<String, dynamic>.from(item)),
+      ],
+      nextBeforeId: _nullableInt(json['next_before_id']),
+      hasMore: _asBool(json['has_more']),
+    );
+  }
+}
+
+class RainHistoryItem {
+  const RainHistoryItem({
+    required this.id,
+    required this.source,
+    required this.eventTime,
+    required this.amountMm,
+    required this.rawValue,
+  });
+
+  final int id;
+  final String source;
+  final String eventTime;
+  final double amountMm;
+  final double? rawValue;
+
+  factory RainHistoryItem.fromJson(Map<String, dynamic> json) {
+    return RainHistoryItem(
+      id: _asInt(json['id'] ?? json['event_id']),
+      source: _asString(json['source'], fallback: 'N/A'),
+      eventTime: _asString(
+        json['event_time'] ?? json['recorded_at'] ?? json['created_at'],
+        fallback: 'N/A',
+      ),
+      amountMm: _asDouble(
+        json['amount_mm'] ?? json['total_mm'] ?? json['mm'],
+        fallback: 0,
+      ),
+      rawValue: _nullableDouble(json['raw_value']),
+    );
+  }
+}
+
 class WateringHistoryPage {
   const WateringHistoryPage({
     required this.items,

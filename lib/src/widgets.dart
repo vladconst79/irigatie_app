@@ -318,9 +318,13 @@ class _MetricTile extends StatelessWidget {
 }
 
 class _RainfallMetricTile extends StatelessWidget {
-  const _RainfallMetricTile({required this.rainfall});
+  const _RainfallMetricTile({
+    required this.rainfall,
+    required this.onShowHistory,
+  });
 
   final Rainfall24h rainfall;
+  final ValueChanged<String> onShowHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -366,6 +370,7 @@ class _RainfallMetricTile extends StatelessWidget {
                       value: rainfall.openMeteoLabel,
                       valueStyle: valueStyle,
                       labelStyle: labelStyle,
+                      onTap: () => onShowHistory('openmeteo'),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -375,6 +380,7 @@ class _RainfallMetricTile extends StatelessWidget {
                       value: rainfall.hardwareLabel,
                       valueStyle: valueStyle,
                       labelStyle: labelStyle,
+                      onTap: () => onShowHistory('hardware'),
                     ),
                   ),
                 ],
@@ -393,32 +399,44 @@ class _RainfallSourceValue extends StatelessWidget {
     required this.value,
     required this.valueStyle,
     required this.labelStyle,
+    required this.onTap,
   });
 
   final String label;
   final String value;
   final TextStyle? valueStyle;
   final TextStyle? labelStyle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: valueStyle,
+    return Tooltip(
+      message: 'Istoric ploaie $label',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: valueStyle,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: labelStyle,
-        ),
-      ],
+      ),
     );
   }
 }

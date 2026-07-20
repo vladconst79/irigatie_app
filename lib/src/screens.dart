@@ -7,12 +7,14 @@ class DashboardScreen extends StatelessWidget {
     required this.isStopping,
     required this.onStop,
     required this.onShowWateringHistory,
+    required this.onShowRainHistory,
   });
 
   final IrrigationSnapshot snapshot;
   final bool isStopping;
   final VoidCallback onStop;
   final VoidCallback onShowWateringHistory;
+  final ValueChanged<String> onShowRainHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +39,10 @@ class DashboardScreen extends StatelessWidget {
               tone: _Tone.blue,
               onTap: onShowWateringHistory,
             ),
-            _RainfallMetricTile(rainfall: snapshot.rainfall24h),
+            _RainfallMetricTile(
+              rainfall: snapshot.rainfall24h,
+              onShowHistory: onShowRainHistory,
+            ),
             _MetricTile(
               icon: Icons.queue_rounded,
               title: 'Coada',
@@ -363,6 +368,242 @@ class _WateringHistoryRow extends StatelessWidget {
   }
 }
 
+class _RainHistorySheet extends StatefulWidget {
+  const _RainHistorySheet({required this.client, required this.source});
+
+  final IrrigationDataClient client;
+  final String source;
+
+  @override
+  State<_RainHistorySheet> createState() => _RainHistorySheetState();
+}
+
+class _RainHistorySheetState extends State<_RainHistorySheet> {
+  final _items = <RainHistoryItem>[];
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
+  int? _nextBeforeId;
+  String? _error;
+
+  String get _sourceLabel => _rainSourceLabel(widget.source);
+
+  @override
+  void initState() {
+    super.initState();
+    _load(reset: true);
+  }
+
+  Future<void> _load({required bool reset}) async {
+    if (_isLoadingMore) return;
+    setState(() {
+      if (reset) {
+        _isLoading = true;
+        _error = null;
+      } else {
+        _isLoadingMore = true;
+      }
+    });
+
+    try {
+      final page = await widget.client.fetchRainHistory(
+        source: widget.source,
+        beforeId: reset ? null : _nextBeforeId,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (reset) {
+          _items
+            ..clear()
+            ..addAll(page.items);
+        } else {
+          _items.addAll(page.items);
+        }
+        _nextBeforeId = page.nextBeforeId;
+        _hasMore = page.hasMore && page.nextBeforeId != null;
+        _isLoading = false;
+        _isLoadingMore = false;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString();
+        _isLoading = false;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return FractionallySizedBox(
+      heightFactor: 0.88,
+      child: Material(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Istoric ploaie · $_sourceLabel',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _isLoading ? null : () => _load(reset: true),
+                    tooltip: 'Refresh',
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: 'Inchide',
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: colors.outlineVariant),
+            Expanded(child: _buildBody(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    if (_isLoading && _items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final error = _error;
+    if (error != null && _items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Istoricul de ploaie nu poate fi incarcat.',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(error, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _load(reset: true),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return Center(
+        child: Text('Nu exista evenimente de ploaie pentru $_sourceLabel.'),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+      itemCount: _items.length + (_hasMore ? 1 : 0),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        if (index == _items.length) {
+          return Center(
+            child: FilledButton.tonalIcon(
+              onPressed: _isLoadingMore ? null : () => _load(reset: false),
+              icon: _isLoadingMore
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                _isLoadingMore ? 'Se incarca...' : 'Incarca mai multe',
+              ),
+            ),
+          );
+        }
+
+        return _RainHistoryRow(item: _items[index]);
+      },
+    );
+  }
+}
+
+class _RainHistoryRow extends StatelessWidget {
+  const _RainHistoryRow({required this.item});
+
+  final RainHistoryItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final rawValue = item.rawValue;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.cloudy_snowing, color: _Tone.amber.color(context)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatMillimeters(item.amountMm),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  [
+                    _rainSourceLabel(item.source),
+                    item.eventTime,
+                  ].where((value) => value.isNotEmpty).join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+                if (rawValue != null) ...[
+                  const SizedBox(height: 10),
+                  _InfoChip(
+                    Icons.sensors_rounded,
+                    'raw ${rawValue.toStringAsFixed(2)}',
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HistoryResultChip extends StatelessWidget {
   const _HistoryResultChip(this.result);
 
@@ -391,6 +632,15 @@ class _HistoryResultChip extends StatelessWidget {
       ),
     );
   }
+}
+
+String _rainSourceLabel(String source) {
+  final normalized = source.toLowerCase();
+  if (normalized == 'openmeteo' || normalized == 'open_meteo') {
+    return 'Open-Meteo';
+  }
+  if (normalized == 'hardware') return 'Hardware';
+  return source.isEmpty ? 'N/A' : source;
 }
 
 class _LoadingState extends StatelessWidget {

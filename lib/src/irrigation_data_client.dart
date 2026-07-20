@@ -49,6 +49,27 @@ class IrrigationDataClient {
     return WateringHistoryPage.fromJson(decoded);
   }
 
+  Future<RainHistoryPage> fetchRainHistory({
+    required String source,
+    int limit = 50,
+    int? beforeId,
+  }) async {
+    final uri = _apiUri(
+      '/api/rain-history',
+      queryParameters: {
+        'source': source,
+        'limit': limit.toString(),
+        if (beforeId != null) 'before_id': beforeId.toString(),
+      },
+    );
+    final response = await _httpClient
+        .get(uri, headers: _headers())
+        .timeout(readTimeout);
+    final decoded = _decodeApiObject(response);
+
+    return RainHistoryPage.fromJson(decoded);
+  }
+
   Future<CommandResult> executeManualProgram(int programId) async {
     final uri = _apiUri('/api/manual/execute');
     final response = await _httpClient

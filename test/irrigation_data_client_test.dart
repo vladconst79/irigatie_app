@@ -95,6 +95,49 @@ void main() {
       });
     },
   );
+
+  test('fetchRainHistory filters by source and parses events', () async {
+    final requested = <Uri>[];
+    final client = IrrigationDataClient(
+      httpClient: MockClient((request) async {
+        requested.add(request.url);
+        return _jsonResponse({
+          'ok': true,
+          'items': [
+            {
+              'id': 42,
+              'source': 'hardware',
+              'event_time': '2026-07-11 05:00:00',
+              'amount_mm': 0.4,
+              'raw_value': 12.34,
+            },
+          ],
+          'next_before_id': 42,
+          'has_more': true,
+        });
+      }),
+    );
+
+    final page = await client.fetchRainHistory(
+      source: 'hardware',
+      limit: 25,
+      beforeId: 99,
+    );
+
+    expect(requested.single.path, '/api/rain-history');
+    expect(requested.single.queryParameters, {
+      'source': 'hardware',
+      'limit': '25',
+      'before_id': '99',
+    });
+    expect(page.items.single.id, 42);
+    expect(page.items.single.source, 'hardware');
+    expect(page.items.single.eventTime, '2026-07-11 05:00:00');
+    expect(page.items.single.amountMm, 0.4);
+    expect(page.items.single.rawValue, 12.34);
+    expect(page.nextBeforeId, 42);
+    expect(page.hasMore, isTrue);
+  });
 }
 
 http.Response _jsonResponse(Map<String, Object?> body) {
