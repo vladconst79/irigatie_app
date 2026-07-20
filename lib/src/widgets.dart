@@ -6,12 +6,16 @@ class _Header extends StatelessWidget {
     required this.snapshot,
     required this.isLoading,
     required this.onRefresh,
+    required this.themeMode,
+    required this.onThemeModeChanged,
   });
 
   final String title;
   final IrrigationSnapshot snapshot;
   final bool isLoading;
   final VoidCallback onRefresh;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +55,12 @@ class _Header extends StatelessWidget {
           Wrap(
             spacing: 10,
             runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              _ThemeModeSelector(
+                themeMode: themeMode,
+                onChanged: onThemeModeChanged,
+              ),
               FilledButton.tonalIcon(
                 onPressed: isLoading ? null : onRefresh,
                 icon: isLoading
@@ -79,6 +88,45 @@ class _Header extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ThemeModeSelector extends StatelessWidget {
+  const _ThemeModeSelector({required this.themeMode, required this.onChanged});
+
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final modes = [ThemeMode.light, ThemeMode.dark, ThemeMode.system];
+
+    return ToggleButtons(
+      isSelected: modes.map((mode) => mode == themeMode).toList(),
+      onPressed: (index) => onChanged(modes[index]),
+      borderRadius: BorderRadius.circular(8),
+      borderColor: colors.outlineVariant,
+      selectedBorderColor: colors.primary,
+      color: colors.onSurfaceVariant,
+      selectedColor: colors.primary,
+      fillColor: colors.primary.withValues(alpha: 0.12),
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 36),
+      children: const [
+        Tooltip(
+          message: 'Light',
+          child: Icon(Icons.light_mode_outlined, size: 20),
+        ),
+        Tooltip(
+          message: 'Dark',
+          child: Icon(Icons.dark_mode_outlined, size: 20),
+        ),
+        Tooltip(
+          message: 'Auto',
+          child: Icon(Icons.brightness_auto_outlined, size: 20),
+        ),
+      ],
     );
   }
 }

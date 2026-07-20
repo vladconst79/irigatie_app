@@ -1,38 +1,107 @@
 part of '../main.dart';
 
-class IrrigationApp extends StatelessWidget {
+class IrrigationApp extends StatefulWidget {
   const IrrigationApp({
     super.key,
     this.initialSnapshot,
     this.apiSettings = ApiSettings.fromEnvironment,
+    this.initialThemeMode = ThemeMode.system,
   });
 
   final IrrigationSnapshot? initialSnapshot;
   final ApiSettings apiSettings;
+  final ThemeMode initialThemeMode;
+
+  @override
+  State<IrrigationApp> createState() => _IrrigationAppState();
+}
+
+class _IrrigationAppState extends State<IrrigationApp> {
+  late ThemeMode _themeMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeMode = widget.initialThemeMode;
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Irigatie',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0E7C66),
-          primary: const Color(0xFF0E7C66),
-          secondary: const Color(0xFF3268A8),
-          tertiary: const Color(0xFFD08B2F),
-          surface: const Color(0xFFF7F8F5),
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF3F5F1),
-        fontFamily: 'Roboto',
-      ),
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: _themeMode,
       home: IrrigationHome(
-        initialSnapshot: initialSnapshot,
-        apiSettings: apiSettings,
+        initialSnapshot: widget.initialSnapshot,
+        apiSettings: widget.apiSettings,
+        themeMode: _themeMode,
+        onThemeModeChanged: _setThemeMode,
       ),
     );
+  }
+
+  void _setThemeMode(ThemeMode mode) {
+    setState(() => _themeMode = mode);
+    unawaited(_ThemeModePreference.save(mode));
+  }
+}
+
+ThemeData _buildTheme(Brightness brightness) {
+  final isDark = brightness == Brightness.dark;
+  final colors = ColorScheme.fromSeed(
+    seedColor: const Color(0xFF0E7C66),
+    brightness: brightness,
+    primary: isDark ? const Color(0xFF49D3B4) : const Color(0xFF0E7C66),
+    secondary: isDark ? const Color(0xFF9BC8FF) : const Color(0xFF3268A8),
+    tertiary: isDark ? const Color(0xFFE6B56C) : const Color(0xFFD08B2F),
+    surface: isDark ? const Color(0xFF141815) : const Color(0xFFF7F8F5),
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: colors,
+    scaffoldBackgroundColor: isDark
+        ? const Color(0xFF0F1311)
+        : const Color(0xFFF3F5F1),
+    fontFamily: 'Roboto',
+    dividerColor: colors.outlineVariant,
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: colors.surface,
+      indicatorColor: colors.primaryContainer,
+    ),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: colors.surface,
+      indicatorColor: colors.primaryContainer,
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: isDark ? const Color(0xFF25302B) : null,
+      contentTextStyle: TextStyle(color: isDark ? colors.onSurface : null),
+    ),
+  );
+}
+
+class _ThemeModePreference {
+  static const _key = 'theme_mode';
+
+  static Future<ThemeMode> load() async {
+    final preferences = await SharedPreferences.getInstance();
+    return _fromStorageValue(preferences.getString(_key));
+  }
+
+  static Future<void> save(ThemeMode mode) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_key, mode.name);
+  }
+
+  static ThemeMode _fromStorageValue(String? value) {
+    return switch (value) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
   }
 }
 
@@ -41,10 +110,14 @@ class IrrigationHome extends StatefulWidget {
     super.key,
     this.initialSnapshot,
     required this.apiSettings,
+    required this.themeMode,
+    required this.onThemeModeChanged,
   });
 
   final IrrigationSnapshot? initialSnapshot;
   final ApiSettings apiSettings;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   @override
   State<IrrigationHome> createState() => _IrrigationHomeState();
@@ -128,6 +201,8 @@ class _IrrigationHomeState extends State<IrrigationHome>
                       snapshot: snapshot,
                       isLoading: _isLoading,
                       onRefresh: _loadSnapshot,
+                      themeMode: widget.themeMode,
+                      onThemeModeChanged: widget.onThemeModeChanged,
                     ),
                   ),
                   SliverPadding(

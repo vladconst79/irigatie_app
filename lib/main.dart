@@ -20,5 +20,6 @@ part 'src/helpers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final apiSettings = await ApiSettings.load();
-  runApp(IrrigationApp(apiSettings: apiSettings));
+  final themeMode = await _ThemeModePreference.load();
+  runApp(IrrigationApp(apiSettings: apiSettings, initialThemeMode: themeMode));
 }
