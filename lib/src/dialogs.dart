@@ -129,12 +129,16 @@ class _ZoneRainStateDetails extends StatelessWidget {
         ),
         _DetailLine(
           'Actualizat',
-          _formatRainStateUpdatedAt(zone.rainStateUpdatedAt),
+          _formatStateUpdatedAt(zone.rainStateUpdatedAt),
         ),
         _DetailLine(
           'Eveniment ploaie',
           zone.lastRainEventId?.toString() ?? 'N/A',
         ),
+        const SizedBox(height: 8),
+        _DetailLine('Deficit ET', _formatMillimeters(zone.waterDeficitMm)),
+        _DetailLine('Ultimul ET0', _formatMillimeters(zone.lastEt0Mm)),
+        _DetailLine('Actualizat ET', _formatStateUpdatedAt(zone.lastEtUpdate)),
       ],
     );
   }

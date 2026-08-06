@@ -1073,6 +1073,10 @@ class _ZoneEditorRow extends StatelessWidget {
           Icons.event_repeat_rounded,
           'fara ploaie ${_formatCyclesWithoutRain(zone.cyclesWithoutRain)}',
         ),
+        _InfoChip(
+          Icons.water_damage_rounded,
+          'deficit ${_formatMillimeters(zone.waterDeficitMm)}',
+        ),
       ],
     );
 

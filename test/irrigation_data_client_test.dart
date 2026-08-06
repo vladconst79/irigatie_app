@@ -40,9 +40,33 @@ void main() {
       expect(snapshot.zones.single.cyclesWithoutRain, 3);
       expect(snapshot.zones.single.rainStateUpdatedAt, '2026-07-11 06:00:00');
       expect(snapshot.zones.single.lastRainEventId, 42);
+      expect(snapshot.zones.single.waterDeficitMm, 2.75);
+      expect(snapshot.zones.single.lastEt0Mm, 5.0);
+      expect(snapshot.zones.single.lastEtUpdate, '2026-08-06 18:00:00');
       expect(snapshot.schedules.single.daysWithoutRain, 3);
     },
   );
+
+  test('fetchSnapshot treats omitted ET fields as null', () async {
+    final client = IrrigationDataClient(
+      apiSettings: const ApiSettings(
+        apiUrl: 'https://irigatie.example.com',
+        apiToken: '',
+      ),
+      httpClient: MockClient((request) async {
+        if (request.url.path == '/api/snapshot') {
+          return _jsonResponse(_snapshotJson(includeEtFields: false));
+        }
+        return http.Response('not found', 404);
+      }),
+    );
+
+    final snapshot = await client.fetchSnapshot();
+
+    expect(snapshot.zones.single.waterDeficitMm, isNull);
+    expect(snapshot.zones.single.lastEt0Mm, isNull);
+    expect(snapshot.zones.single.lastEtUpdate, isNull);
+  });
 
   test(
     'fetchSnapshot reflects unavailable status from snapshot payload',
@@ -148,7 +172,28 @@ http.Response _jsonResponse(Map<String, Object?> body) {
   );
 }
 
-Map<String, Object?> _snapshotJson({bool statusAvailable = true}) {
+Map<String, Object?> _snapshotJson({
+  bool statusAvailable = true,
+  bool includeEtFields = true,
+}) {
+  final zone = <String, Object?>{
+    'id': 1,
+    'name': 'Gazon',
+    'type': 'sprinkler',
+    'enabled': true,
+    'relay_active': true,
+    'relay_value': 1,
+    'rain_credit_mm': 1.25,
+    'cycles_without_rain': 3,
+    'rain_state_updated_at': '2026-07-11 06:00:00',
+    'last_rain_event_id': 42,
+    if (includeEtFields) ...{
+      'water_deficit_mm': 2.75,
+      'last_et0_mm': 5.0,
+      'last_et_update': '2026-08-06 18:00:00',
+    },
+  };
+
   return {
     'ok': true,
     'database': {'ok': true, 'name': 'irigatie'},
@@ -197,20 +242,7 @@ Map<String, Object?> _snapshotJson({bool statusAvailable = true}) {
         },
       },
     },
-    'zones': [
-      {
-        'id': 1,
-        'name': 'Gazon',
-        'type': 'sprinkler',
-        'enabled': true,
-        'relay_active': true,
-        'relay_value': 1,
-        'rain_credit_mm': 1.25,
-        'cycles_without_rain': 3,
-        'rain_state_updated_at': '2026-07-11 06:00:00',
-        'last_rain_event_id': 42,
-      },
-    ],
+    'zones': [zone],
     'schedules': [
       {
         'id': 12,

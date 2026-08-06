@@ -42,6 +42,9 @@ class IrrigationZone {
     required this.cyclesWithoutRain,
     required this.rainStateUpdatedAt,
     required this.lastRainEventId,
+    required this.waterDeficitMm,
+    required this.lastEt0Mm,
+    required this.lastEtUpdate,
     required this.color,
   });
 
@@ -55,6 +58,9 @@ class IrrigationZone {
   final int? cyclesWithoutRain;
   final String? rainStateUpdatedAt;
   final int? lastRainEventId;
+  final double? waterDeficitMm;
+  final double? lastEt0Mm;
+  final String? lastEtUpdate;
   final Color color;
 
   IconData get icon =>
@@ -72,6 +78,9 @@ class IrrigationZone {
       cyclesWithoutRain: _nullableInt(json['cycles_without_rain']),
       rainStateUpdatedAt: _nullableString(json['rain_state_updated_at']),
       lastRainEventId: _nullableInt(json['last_rain_event_id']),
+      waterDeficitMm: _nullableDouble(json['water_deficit_mm']),
+      lastEt0Mm: _nullableDouble(json['last_et0_mm']),
+      lastEtUpdate: _nullableString(json['last_et_update']),
       color: _zoneColors[index % _zoneColors.length],
     );
   }
@@ -668,6 +677,9 @@ class IrrigationSnapshot {
         cyclesWithoutRain: 1,
         rainStateUpdatedAt: '2026-07-15 07:30:00',
         lastRainEventId: 184,
+        waterDeficitMm: 2.8,
+        lastEt0Mm: 5.0,
+        lastEtUpdate: '2026-07-15 18:00:00',
         color: Color(0xFF0E7C66),
       ),
       IrrigationZone(
@@ -681,6 +693,9 @@ class IrrigationSnapshot {
         cyclesWithoutRain: 3,
         rainStateUpdatedAt: '2026-07-15 07:30:00',
         lastRainEventId: 184,
+        waterDeficitMm: 1.6,
+        lastEt0Mm: 5.0,
+        lastEtUpdate: '2026-07-15 18:00:00',
         color: Color(0xFF3268A8),
       ),
       IrrigationZone(
@@ -694,6 +709,9 @@ class IrrigationSnapshot {
         cyclesWithoutRain: 5,
         rainStateUpdatedAt: '2026-07-14 21:10:00',
         lastRainEventId: 183,
+        waterDeficitMm: 3.4,
+        lastEt0Mm: 5.0,
+        lastEtUpdate: '2026-07-15 18:00:00',
         color: Color(0xFFD08B2F),
       ),
       IrrigationZone(
@@ -707,6 +725,9 @@ class IrrigationSnapshot {
         cyclesWithoutRain: null,
         rainStateUpdatedAt: null,
         lastRainEventId: null,
+        waterDeficitMm: null,
+        lastEt0Mm: null,
+        lastEtUpdate: null,
         color: Color(0xFF7B5EA7),
       ),
     ];

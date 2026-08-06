@@ -21,6 +21,9 @@ IrrigationZone _unknownZone(int id) {
     cyclesWithoutRain: null,
     rainStateUpdatedAt: null,
     lastRainEventId: null,
+    waterDeficitMm: null,
+    lastEt0Mm: null,
+    lastEtUpdate: null,
     color: _zoneColors[id.abs() % _zoneColors.length],
   );
 }
@@ -153,7 +156,7 @@ String _formatCyclesWithoutRain(int? value) {
   return '$value cicluri';
 }
 
-String _formatRainStateUpdatedAt(String? value) {
+String _formatStateUpdatedAt(String? value) {
   return value == null || value.isEmpty ? 'N/A' : value;
 }
 
