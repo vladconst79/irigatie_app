@@ -325,26 +325,17 @@ class _EtSummary {
   const _EtSummary({
     required this.maxDeficitMm,
     required this.maxDeficitZoneName,
-    required this.lastEt0Mm,
-    required this.lastEtUpdate,
   });
 
   final double? maxDeficitMm;
   final String? maxDeficitZoneName;
-  final double? lastEt0Mm;
-  final String? lastEtUpdate;
 
   String get valueLabel => _formatMillimeters(maxDeficitMm);
 
   String get detailLabel {
     final zoneName = maxDeficitZoneName;
-    final zoneDetail = zoneName == null
-        ? 'fara date ET'
-        : 'deficit maxim: $zoneName';
-    final et0Detail = 'ET0 ${_formatMillimeters(lastEt0Mm)}';
-    final updatedDetail = 'actualizat ${_formatStateUpdatedAt(lastEtUpdate)}';
-
-    return '$zoneDetail · $et0Detail\n$updatedDetail';
+    if (zoneName == null) return 'Fara date deficit apa';
+    return 'Deficit maxim: $zoneName · ${_formatMillimeters(maxDeficitMm)}';
   }
 
   _Tone get tone {
@@ -357,7 +348,6 @@ class _EtSummary {
 
   factory _EtSummary.fromZones(List<IrrigationZone> zones) {
     IrrigationZone? maxDeficitZone;
-    IrrigationZone? latestEtZone;
 
     for (final zone in zones.where((zone) => zone.enabled)) {
       final deficit = zone.waterDeficitMm;
@@ -366,23 +356,11 @@ class _EtSummary {
               deficit > (maxDeficitZone.waterDeficitMm ?? 0))) {
         maxDeficitZone = zone;
       }
-
-      if (zone.lastEt0Mm != null || zone.lastEtUpdate != null) {
-        if (latestEtZone == null ||
-            _formatStateUpdatedAt(
-                  zone.lastEtUpdate,
-                ).compareTo(_formatStateUpdatedAt(latestEtZone.lastEtUpdate)) >
-                0) {
-          latestEtZone = zone;
-        }
-      }
     }
 
     return _EtSummary(
       maxDeficitMm: maxDeficitZone?.waterDeficitMm,
       maxDeficitZoneName: maxDeficitZone?.name,
-      lastEt0Mm: latestEtZone?.lastEt0Mm,
-      lastEtUpdate: latestEtZone?.lastEtUpdate,
     );
   }
 }
@@ -1116,12 +1094,14 @@ class _DurationBar extends StatelessWidget {
 class _ZoneEditorRow extends StatelessWidget {
   const _ZoneEditorRow({
     required this.zone,
+    required this.maxWaterDeficitMm,
     required this.isTesting,
     required this.onTest,
     required this.onEdit,
   });
 
   final IrrigationZone zone;
+  final double maxWaterDeficitMm;
   final bool isTesting;
   final VoidCallback onTest;
   final VoidCallback onEdit;
@@ -1129,7 +1109,7 @@ class _ZoneEditorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final summary = Wrap(
+    final summaryChips = Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
@@ -1143,11 +1123,11 @@ class _ZoneEditorRow extends StatelessWidget {
           Icons.event_repeat_rounded,
           'fara ploaie ${_formatCyclesWithoutRain(zone.cyclesWithoutRain)}',
         ),
-        _InfoChip(
-          Icons.water_damage_rounded,
-          'deficit ${_formatMillimeters(zone.waterDeficitMm)}',
-        ),
       ],
+    );
+    final etDeficitBar = _ZoneEtDeficitBar(
+      zone: zone,
+      maxWaterDeficitMm: maxWaterDeficitMm,
     );
 
     return Material(
@@ -1180,7 +1160,9 @@ class _ZoneEditorRow extends StatelessWidget {
                       children: [
                         _ZoneTitle(zone: zone),
                         const SizedBox(height: 12),
-                        summary,
+                        summaryChips,
+                        const SizedBox(height: 12),
+                        etDeficitBar,
                         const SizedBox(height: 12),
                         actions,
                       ],
@@ -1190,7 +1172,17 @@ class _ZoneEditorRow extends StatelessWidget {
                   return Row(
                     children: [
                       Expanded(flex: 3, child: _ZoneTitle(zone: zone)),
-                      Expanded(flex: 4, child: summary),
+                      Expanded(
+                        flex: 4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            summaryChips,
+                            const SizedBox(height: 12),
+                            etDeficitBar,
+                          ],
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       actions,
                     ],
@@ -1201,6 +1193,62 @@ class _ZoneEditorRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ZoneEtDeficitBar extends StatelessWidget {
+  const _ZoneEtDeficitBar({
+    required this.zone,
+    required this.maxWaterDeficitMm,
+  });
+
+  final IrrigationZone zone;
+  final double maxWaterDeficitMm;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final deficit = zone.waterDeficitMm;
+    final hasDeficit = deficit != null;
+    final scale = maxWaterDeficitMm <= 0 ? 1.0 : maxWaterDeficitMm;
+    final fraction = hasDeficit ? (deficit / scale).clamp(0.0, 1.0) : 0.0;
+    final barColor = hasDeficit ? zone.color : colors.outline;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.water_damage_rounded, size: 18, color: barColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Deficit apa',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Text(
+              _formatMillimeters(deficit),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            minHeight: 10,
+            value: fraction,
+            color: barColor,
+            backgroundColor: barColor.withValues(alpha: 0.12),
+          ),
+        ),
+      ],
     );
   }
 }

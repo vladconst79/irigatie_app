@@ -133,7 +133,7 @@ class _EtStateSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final zones = [...snapshot.zones]
+    final zones = snapshot.zones.where((zone) => zone.enabled).toList()
       ..sort((left, right) {
         final leftDeficit = left.waterDeficitMm;
         final rightDeficit = right.waterDeficitMm;
@@ -174,7 +174,9 @@ class _EtStateSheet extends StatelessWidget {
             Divider(height: 1, color: colors.outlineVariant),
             Expanded(
               child: zones.isEmpty
-                  ? const Center(child: Text('Nu exista date ET pentru zone.'))
+                  ? const Center(
+                      child: Text('Nu exista zone active cu date ET.'),
+                    )
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
                       itemCount: zones.length + 1,
@@ -957,6 +959,11 @@ class ZonesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maxWaterDeficitMm = snapshot.zones
+        .map((zone) => zone.waterDeficitMm)
+        .whereType<double>()
+        .fold<double>(0, (max, value) => value > max ? value : max);
+
     return _Panel(
       title: 'Trasee',
       child: Column(
@@ -964,6 +971,7 @@ class ZonesScreen extends StatelessWidget {
             .map(
               (zone) => _ZoneEditorRow(
                 zone: zone,
+                maxWaterDeficitMm: maxWaterDeficitMm,
                 isTesting: testingZoneId == zone.id,
                 onTest: () => onTestZone(zone),
                 onEdit: () => onEditZone(zone),
