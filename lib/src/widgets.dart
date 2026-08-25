@@ -317,6 +317,72 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+class _EtSummary {
+  const _EtSummary({
+    required this.maxDeficitMm,
+    required this.maxDeficitZoneName,
+    required this.lastEt0Mm,
+    required this.lastEtUpdate,
+  });
+
+  final double? maxDeficitMm;
+  final String? maxDeficitZoneName;
+  final double? lastEt0Mm;
+  final String? lastEtUpdate;
+
+  String get valueLabel => _formatMillimeters(maxDeficitMm);
+
+  String get detailLabel {
+    final zoneName = maxDeficitZoneName;
+    final zoneDetail = zoneName == null
+        ? 'fara date ET'
+        : 'deficit maxim: $zoneName';
+    final et0Detail = 'ET0 ${_formatMillimeters(lastEt0Mm)}';
+    final updatedDetail = 'actualizat ${_formatStateUpdatedAt(lastEtUpdate)}';
+
+    return '$zoneDetail · $et0Detail\n$updatedDetail';
+  }
+
+  _Tone get tone {
+    final deficit = maxDeficitMm;
+    if (deficit == null) return _Tone.neutral;
+    if (deficit <= 1.0) return _Tone.green;
+    if (deficit <= 3.0) return _Tone.amber;
+    return _Tone.red;
+  }
+
+  factory _EtSummary.fromZones(List<IrrigationZone> zones) {
+    IrrigationZone? maxDeficitZone;
+    IrrigationZone? latestEtZone;
+
+    for (final zone in zones.where((zone) => zone.enabled)) {
+      final deficit = zone.waterDeficitMm;
+      if (deficit != null &&
+          (maxDeficitZone == null ||
+              deficit > (maxDeficitZone.waterDeficitMm ?? 0))) {
+        maxDeficitZone = zone;
+      }
+
+      if (zone.lastEt0Mm != null || zone.lastEtUpdate != null) {
+        if (latestEtZone == null ||
+            _formatStateUpdatedAt(
+                  zone.lastEtUpdate,
+                ).compareTo(_formatStateUpdatedAt(latestEtZone.lastEtUpdate)) >
+                0) {
+          latestEtZone = zone;
+        }
+      }
+    }
+
+    return _EtSummary(
+      maxDeficitMm: maxDeficitZone?.waterDeficitMm,
+      maxDeficitZoneName: maxDeficitZone?.name,
+      lastEt0Mm: latestEtZone?.lastEt0Mm,
+      lastEtUpdate: latestEtZone?.lastEtUpdate,
+    );
+  }
+}
+
 class _RainfallMetricTile extends StatelessWidget {
   const _RainfallMetricTile({
     required this.rainfall,
@@ -1320,16 +1386,24 @@ class _DetailLine extends StatelessWidget {
 }
 
 class _ResponsiveGrid extends StatelessWidget {
-  const _ResponsiveGrid({required this.children, required this.minTileWidth});
+  const _ResponsiveGrid({
+    required this.children,
+    required this.minTileWidth,
+    this.maxColumns = 4,
+  });
 
   final List<Widget> children;
   final double minTileWidth;
+  final int maxColumns;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final count = (constraints.maxWidth / minTileWidth).floor().clamp(1, 4);
+        final count = (constraints.maxWidth / minTileWidth).floor().clamp(
+          1,
+          maxColumns,
+        );
 
         return GridView.builder(
           shrinkWrap: true,

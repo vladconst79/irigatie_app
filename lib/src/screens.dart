@@ -18,11 +18,14 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final etSummary = _EtSummary.fromZones(snapshot.zones);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _ResponsiveGrid(
           minTileWidth: 220,
+          maxColumns: 5,
           children: [
             _MetricTile(
               icon: Icons.power_settings_new_rounded,
@@ -42,6 +45,13 @@ class DashboardScreen extends StatelessWidget {
             _RainfallMetricTile(
               rainfall: snapshot.rainfall24h,
               onShowHistory: onShowRainHistory,
+            ),
+            _MetricTile(
+              icon: Icons.local_florist_rounded,
+              title: 'Necesar apa',
+              value: etSummary.valueLabel,
+              detail: etSummary.detailLabel,
+              tone: etSummary.tone,
             ),
             _MetricTile(
               icon: Icons.queue_rounded,
