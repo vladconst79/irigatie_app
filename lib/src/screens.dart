@@ -8,6 +8,7 @@ class DashboardScreen extends StatelessWidget {
     required this.onStop,
     required this.onShowWateringHistory,
     required this.onShowRainHistory,
+    required this.onShowEtDetails,
   });
 
   final IrrigationSnapshot snapshot;
@@ -15,6 +16,7 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback onStop;
   final VoidCallback onShowWateringHistory;
   final ValueChanged<String> onShowRainHistory;
+  final VoidCallback onShowEtDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +43,8 @@ class DashboardScreen extends StatelessWidget {
               detail: '${snapshot.remainingLabel} · istoric udari',
               tone: _Tone.blue,
               onTap: onShowWateringHistory,
+              tooltipMessage: 'Istoric udari',
+              tapIcon: Icons.history_rounded,
             ),
             _RainfallMetricTile(
               rainfall: snapshot.rainfall24h,
@@ -52,6 +56,9 @@ class DashboardScreen extends StatelessWidget {
               value: etSummary.valueLabel,
               detail: etSummary.detailLabel,
               tone: etSummary.tone,
+              onTap: onShowEtDetails,
+              tooltipMessage: 'Detalii ET',
+              tapIcon: Icons.info_outline_rounded,
             ),
             _MetricTile(
               icon: Icons.queue_rounded,
@@ -114,6 +121,155 @@ class DashboardScreen extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _EtStateSheet extends StatelessWidget {
+  const _EtStateSheet({required this.snapshot});
+
+  final IrrigationSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final zones = [...snapshot.zones]
+      ..sort((left, right) {
+        final leftDeficit = left.waterDeficitMm;
+        final rightDeficit = right.waterDeficitMm;
+        if (leftDeficit == null && rightDeficit == null) return 0;
+        if (leftDeficit == null) return 1;
+        if (rightDeficit == null) return -1;
+        return rightDeficit.compareTo(leftDeficit);
+      });
+
+    return FractionallySizedBox(
+      heightFactor: 0.82,
+      child: Material(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Stare ET',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: 'Inchide',
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: colors.outlineVariant),
+            Expanded(
+              child: zones.isEmpty
+                  ? const Center(child: Text('Nu exista date ET pentru zone.'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+                      itemCount: zones.length + 1,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return const _EtStateNotice();
+                        }
+
+                        return _EtStateRow(zone: zones[index - 1]);
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EtStateNotice extends StatelessWidget {
+  const _EtStateNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: const Text(
+        'Backend-ul expune starea ET curenta, nu un istoric ET paginat.',
+      ),
+    );
+  }
+}
+
+class _EtStateRow extends StatelessWidget {
+  const _EtStateRow({required this.zone});
+
+  final IrrigationZone zone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: zone.color.withValues(alpha: 0.16),
+                child: Icon(zone.icon, color: zone.color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  zone.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _StateChip(zone.enabled ? 'activ' : 'inactiv', zone.enabled),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _DetailLine('Deficit apa', _formatMillimeters(zone.waterDeficitMm)),
+          _DetailLine('Ultimul ET0', _formatMillimeters(zone.lastEt0Mm)),
+          _DetailLine(
+            'Actualizat ET',
+            _formatStateUpdatedAt(zone.lastEtUpdate),
+          ),
+          _DetailLine('Ploaie credit', _formatMillimeters(zone.rainCreditMm)),
+          _DetailLine(
+            'Fara ploaie',
+            _formatCyclesWithoutRain(zone.cyclesWithoutRain),
+          ),
+        ],
+      ),
     );
   }
 }

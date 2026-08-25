@@ -231,6 +231,8 @@ class _MetricTile extends StatelessWidget {
     required this.detail,
     required this.tone,
     this.onTap,
+    this.tooltipMessage,
+    this.tapIcon = Icons.history_rounded,
   });
 
   final IconData icon;
@@ -239,6 +241,8 @@ class _MetricTile extends StatelessWidget {
   final String detail;
   final _Tone tone;
   final VoidCallback? onTap;
+  final String? tooltipMessage;
+  final IconData tapIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +260,7 @@ class _MetricTile extends StatelessWidget {
               Icon(icon, color: color, size: 28),
               if (onTap != null) ...[
                 const Spacer(),
-                Icon(Icons.history_rounded, color: color, size: 22),
+                Icon(tapIcon, color: color, size: 22),
               ],
             ],
           ),
@@ -313,7 +317,7 @@ class _MetricTile extends StatelessWidget {
 
     if (onTap == null) return tile;
 
-    return Tooltip(message: 'Istoric udari', child: tile);
+    return Tooltip(message: tooltipMessage ?? title, child: tile);
   }
 }
 
