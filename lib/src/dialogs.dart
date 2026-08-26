@@ -12,6 +12,7 @@ class ZoneDialog extends StatefulWidget {
 class _ZoneDialogState extends State<ZoneDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _applicationRateController;
   late ZoneType _type;
   late bool _enabled;
 
@@ -20,6 +21,9 @@ class _ZoneDialogState extends State<ZoneDialog> {
     super.initState();
     final zone = widget.zone;
     _nameController = TextEditingController(text: zone?.name ?? '');
+    _applicationRateController = TextEditingController(
+      text: _formatEditableNumber(zone?.applicationRateMmPerHour),
+    );
     _type = zone?.type ?? ZoneType.sprinkler;
     _enabled = zone?.enabled ?? true;
   }
@@ -27,6 +31,7 @@ class _ZoneDialogState extends State<ZoneDialog> {
   @override
   void dispose() {
     _nameController.dispose();
+    _applicationRateController.dispose();
     super.dispose();
   }
 
@@ -38,53 +43,72 @@ class _ZoneDialogState extends State<ZoneDialog> {
       title: Text(editing ? 'Editeaza traseu' : 'Adauga traseu'),
       content: SizedBox(
         width: 480,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nume',
-                  prefixIcon: Icon(Icons.label_rounded),
-                  border: OutlineInputBorder(),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nume',
+                    prefixIcon: Icon(Icons.label_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _requiredText,
                 ),
-                validator: _requiredText,
-              ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<ZoneType>(
-                initialValue: _type,
-                decoration: const InputDecoration(
-                  labelText: 'Tip',
-                  prefixIcon: Icon(Icons.alt_route_rounded),
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<ZoneType>(
+                  initialValue: _type,
+                  decoration: const InputDecoration(
+                    labelText: 'Tip',
+                    prefixIcon: Icon(Icons.alt_route_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: ZoneType.values
+                      .map(
+                        (type) => DropdownMenuItem(
+                          value: type,
+                          child: Text(type.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _type = value ?? ZoneType.sprinkler),
                 ),
-                items: ZoneType.values
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(type.label),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) =>
-                    setState(() => _type = value ?? ZoneType.sprinkler),
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Activ'),
-                value: _enabled,
-                onChanged: (value) => setState(() => _enabled = value),
-              ),
-              if (editing) ...[
                 const SizedBox(height: 8),
-                const Divider(height: 1),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Activ'),
+                  value: _enabled,
+                  onChanged: (value) => setState(() => _enabled = value),
+                ),
                 const SizedBox(height: 8),
-                _ZoneRainStateDetails(zone: widget.zone!),
+                TextFormField(
+                  controller: _applicationRateController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Rata aplicare (mm/ora)',
+                    helperText: 'Gol = necalibrat',
+                    prefixIcon: Icon(Icons.speed_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: _optionalPositiveNumber,
+                ),
+                if (editing) ...[
+                  const SizedBox(height: 8),
+                  const Divider(height: 1),
+                  const SizedBox(height: 8),
+                  _ZoneRainStateDetails(zone: widget.zone!),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -108,6 +132,9 @@ class _ZoneDialogState extends State<ZoneDialog> {
         name: _nameController.text.trim(),
         type: _type,
         enabled: _enabled,
+        applicationRateMmPerHour: _parseOptionalDouble(
+          _applicationRateController.text,
+        ),
       ),
     );
   }

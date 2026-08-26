@@ -17,6 +17,7 @@ IrrigationZone _unknownZone(int id) {
     enabled: false,
     relayActive: false,
     relayValue: null,
+    applicationRateMmPerHour: null,
     rainCreditMm: null,
     cyclesWithoutRain: null,
     rainStateUpdatedAt: null,
@@ -148,6 +149,27 @@ String _formatSeconds(double? value) {
 String _formatMillimeters(double? value) {
   if (value == null) return 'N/A';
   return '${value.toStringAsFixed(1)} mm';
+}
+
+String _formatEditableNumber(double? value) {
+  if (value == null) return '';
+  if (value == value.roundToDouble()) return value.round().toString();
+  return value.toString();
+}
+
+double? _parseOptionalDouble(String value) {
+  final text = value.trim().replaceAll(',', '.');
+  if (text.isEmpty) return null;
+  return double.parse(text);
+}
+
+String? _optionalPositiveNumber(String? value) {
+  final text = value?.trim().replaceAll(',', '.') ?? '';
+  if (text.isEmpty) return null;
+  final parsed = double.tryParse(text);
+  if (parsed == null) return 'Numar invalid';
+  if (parsed <= 0) return 'Trebuie sa fie mai mare decat 0';
+  return null;
 }
 
 String _formatCyclesWithoutRain(int? value) {

@@ -38,6 +38,7 @@ class IrrigationZone {
     required this.enabled,
     required this.relayActive,
     required this.relayValue,
+    required this.applicationRateMmPerHour,
     required this.rainCreditMm,
     required this.cyclesWithoutRain,
     required this.rainStateUpdatedAt,
@@ -54,6 +55,7 @@ class IrrigationZone {
   final bool enabled;
   final bool relayActive;
   final double? relayValue;
+  final double? applicationRateMmPerHour;
   final double? rainCreditMm;
   final int? cyclesWithoutRain;
   final String? rainStateUpdatedAt;
@@ -74,6 +76,9 @@ class IrrigationZone {
       enabled: _asBool(json['enabled'], fallback: true),
       relayActive: _asBool(json['relay_active']),
       relayValue: _nullableDouble(json['relay_value']),
+      applicationRateMmPerHour: _nullableDouble(
+        json['application_rate_mm_per_hour'],
+      ),
       rainCreditMm: _nullableDouble(json['rain_credit_mm']),
       cyclesWithoutRain: _nullableInt(json['cycles_without_rain']),
       rainStateUpdatedAt: _nullableString(json['rain_state_updated_at']),
@@ -441,16 +446,19 @@ class ZoneWriteRequest {
     required this.name,
     required this.type,
     required this.enabled,
+    required this.applicationRateMmPerHour,
   });
 
   final String name;
   final ZoneType type;
   final bool enabled;
+  final double? applicationRateMmPerHour;
 
   Map<String, Object?> toJson() => {
     'name': name,
     'type': type.apiValue,
     'enabled': enabled,
+    'application_rate_mm_per_hour': applicationRateMmPerHour,
   };
 }
 
@@ -673,6 +681,7 @@ class IrrigationSnapshot {
         enabled: true,
         relayActive: true,
         relayValue: 1,
+        applicationRateMmPerHour: 12,
         rainCreditMm: 1.2,
         cyclesWithoutRain: 1,
         rainStateUpdatedAt: '2026-07-15 07:30:00',
@@ -689,6 +698,7 @@ class IrrigationSnapshot {
         enabled: true,
         relayActive: false,
         relayValue: 0,
+        applicationRateMmPerHour: 8,
         rainCreditMm: 0.4,
         cyclesWithoutRain: 3,
         rainStateUpdatedAt: '2026-07-15 07:30:00',
@@ -705,6 +715,7 @@ class IrrigationSnapshot {
         enabled: true,
         relayActive: false,
         relayValue: 0,
+        applicationRateMmPerHour: 6,
         rainCreditMm: 0,
         cyclesWithoutRain: 5,
         rainStateUpdatedAt: '2026-07-14 21:10:00',
@@ -721,6 +732,7 @@ class IrrigationSnapshot {
         enabled: false,
         relayActive: false,
         relayValue: 0,
+        applicationRateMmPerHour: null,
         rainCreditMm: null,
         cyclesWithoutRain: null,
         rainStateUpdatedAt: null,

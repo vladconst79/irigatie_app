@@ -36,6 +36,7 @@ void main() {
       expect(snapshot.transformerRelay?.value, 1);
       expect(snapshot.rainfall24h.openMeteoMm, 2.5);
       expect(snapshot.rainfall24h.hardwareMm, 0.4);
+      expect(snapshot.zones.single.applicationRateMmPerHour, 12.5);
       expect(snapshot.zones.single.rainCreditMm, 1.25);
       expect(snapshot.zones.single.cyclesWithoutRain, 3);
       expect(snapshot.zones.single.rainStateUpdatedAt, '2026-07-11 06:00:00');
@@ -162,6 +163,36 @@ void main() {
     expect(page.nextBeforeId, 42);
     expect(page.hasMore, isTrue);
   });
+
+  test('updateZone sends application rate in PATCH body', () async {
+    late Map<String, dynamic> body;
+    final client = IrrigationDataClient(
+      httpClient: MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, '/api/zones/1');
+        body = jsonDecode(request.body) as Map<String, dynamic>;
+        return _jsonResponse({'ok': true, 'id': 1, 'message': 'updated'});
+      }),
+    );
+
+    final result = await client.updateZone(
+      1,
+      const ZoneWriteRequest(
+        name: 'Gazon',
+        type: ZoneType.sprinkler,
+        enabled: true,
+        applicationRateMmPerHour: 12.5,
+      ),
+    );
+
+    expect(result.id, 1);
+    expect(body, {
+      'name': 'Gazon',
+      'type': 'sprinkler',
+      'enabled': true,
+      'application_rate_mm_per_hour': 12.5,
+    });
+  });
 }
 
 http.Response _jsonResponse(Map<String, Object?> body) {
@@ -183,6 +214,7 @@ Map<String, Object?> _snapshotJson({
     'enabled': true,
     'relay_active': true,
     'relay_value': 1,
+    'application_rate_mm_per_hour': 12.5,
     'rain_credit_mm': 1.25,
     'cycles_without_rain': 3,
     'rain_state_updated_at': '2026-07-11 06:00:00',
